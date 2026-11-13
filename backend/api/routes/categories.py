@@ -1,0 +1,208 @@
+"""
+Categories API routes.
+"""
+from typing import List
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
+
+from ..database import get_db
+from ..models import Category, Subcategory
+from ..schemas import (
+    CategoryResponse, CategoryCreate, CategoryUpdate, CategoryTreeResponse,
+    SubcategoryResponse, SubcategoryCreate, MessageResponse
+)
+
+router = APIRouter(prefix="/api/categories", tags=["categories"])
+
+
+@router.get("", response_model=CategoryTreeResponse)
+async def get_categories(admin_view: bool = False, db: AsyncSession = Depends(get_db)):
+    """Get all categories with their subcategories."""
+    stmt = select(Category).options(selectinload(Category.subcategories))
+    if not admin_view:
+        stmt = stmt.where(Category.active == True)
+    stmt = stmt.order_by(Category.name)
+    
+    result = await db.execute(stmt)
+    categories = result.scalars().all()
+    
+    # Filter and sort subcategories
+    for category in categories:
+        category.subcategories = sorted(
+            [s for s in category.subcategories if s.active or admin_view], 
+            key=lambda x: x.name
+        )
+    
+    return CategoryTreeResponse(categories=categories)
+
+
+@router.get("/{category_id}", response_model=CategoryResponse)
+async def get_category(category_id: int, db: AsyncSession = Depends(get_db)):
+    """Get a single category by ID."""
+    result = await db.execute(
+        select(Category)
+        .options(selectinload(Category.subcategories))
+        .where(Category.id == category_id, Category.active == True)
+    )
+    category = result.scalar_one_or_none()
+    
+    if not category:
+        raise HTTPException(status_code=404, detail="Категория не найдена")
+    
+    return category
+
+
+@router.post("", response_model=CategoryResponse)
+async def create_category(
+    category: CategoryCreate,
+    db: AsyncSession = Depends(get_db)
+):
+    """Create a new category."""
+    db_category = Category(**category.model_dump())
+    db.add(db_category)
+    await db.commit()
+    
+    # Reload with relationships
+    result = await db.execute(
+        select(Category)
+        .options(selectinload(Category.subcategories))
+        .where(Category.id == db_category.id)
+    )
+    db_category = result.scalar_one()
+    
+    return db_category
+
+
+@router.put("/{category_id}", response_model=CategoryResponse)
+async def update_category(
+    category_id: int,
+    category: CategoryUpdate,
+    db: AsyncSession = Depends(get_db)
+):
+    """Update a category."""
+    result = await db.execute(select(Category).where(Category.id == category_id))
+    db_category = result.scalar_one_or_none()
+    
+    if not db_category:
+        raise HTTPException(status_code=404, detail="Категория не найдена")
+    
+    for key, value in category.model_dump(exclude_unset=True).items():
+        setattr(db_category, key, value)
+    
+    await db.commit()
+    
+    # Reload category with subcategories relationship to prevent MissingGreenlet error during serialization
+    result = await db.execute(
+        select(Category)
+        .options(selectinload(Category.subcategories))
+        .where(Category.id == category_id)
+    )
+    db_category = result.scalar_one()
+    return db_category
+
+
+@router.delete("/{category_id}", response_model=MessageResponse)
+async def delete_category(category_id: int, db: AsyncSession = Depends(get_db)):
+    """Delete a category."""
+    result = await db.execute(
+        select(Category)
+        .options(selectinload(Category.products))
+        .where(Category.id == category_id)
+    )
+    db_category = result.scalar_one_or_none()
+    
+    if not db_category:
+        raise HTTPException(status_code=404, detail="Категория не найдена")
+    
+    # Cascade delete products? Or just delete them?
+    # SQLAlchemy cascade might handle this if configured, but let's be explicit or rely on DB.
+    # If we want to allow deleting category with products, we should delete products first or set cascade.
+    
+    if db_category.products:
+        # Soft-delete products
+        for product in db_category.products:
+            product.active = False
+    
+    # Soft-delete category
+    db_category.active = False
+    await db.commit()
+    return MessageResponse(message="Категория удалена")
+
+
+# --- Subcategory routes ---
+
+@router.post("/subcategories", response_model=SubcategoryResponse)
+async def create_subcategory_generic(
+    subcategory: SubcategoryCreate,
+    db: AsyncSession = Depends(get_db)
+):
+    """Create a new subcategory."""
+    # Check category exists
+    result = await db.execute(select(Category).where(Category.id == subcategory.category_id))
+    if not result.scalar_one_or_none():
+        raise HTTPException(status_code=404, detail="Категория не найдена")
+    
+    db_subcategory = Subcategory(**subcategory.model_dump())
+    db.add(db_subcategory)
+    await db.commit()
+    await db.refresh(db_subcategory)
+    return db_subcategory
+
+
+@router.post("/{category_id}/subcategories", response_model=SubcategoryResponse)
+async def create_subcategory(
+    category_id: int,
+    subcategory: SubcategoryCreate,
+    db: AsyncSession = Depends(get_db)
+):
+    """Create a new subcategory within a category (Legacy path)."""
+    subcategory.category_id = category_id
+    return await create_subcategory_generic(subcategory, db)
+
+
+@router.put("/subcategories/{subcategory_id}", response_model=SubcategoryResponse)
+async def update_subcategory(
+    subcategory_id: int,
+    subcategory: SubcategoryCreate,
+    db: AsyncSession = Depends(get_db)
+):
+    """Update a subcategory."""
+    result = await db.execute(select(Subcategory).where(Subcategory.id == subcategory_id))
+    db_subcategory = result.scalar_one_or_none()
+    
+    if not db_subcategory:
+        raise HTTPException(status_code=404, detail="Подкатегория не найдена")
+    
+    db_subcategory.name = subcategory.name
+    db_subcategory.order = subcategory.order
+    db_subcategory.image_file_id = subcategory.image_file_id
+    db_subcategory.image_url = subcategory.image_url
+    
+    await db.commit()
+    await db.refresh(db_subcategory)
+    return db_subcategory
+
+
+@router.delete("/subcategories/{subcategory_id}", response_model=MessageResponse)
+async def delete_subcategory(subcategory_id: int, db: AsyncSession = Depends(get_db)):
+    """Delete a subcategory."""
+    result = await db.execute(
+        select(Subcategory)
+        .options(selectinload(Subcategory.products))
+        .where(Subcategory.id == subcategory_id)
+    )
+    db_subcategory = result.scalar_one_or_none()
+    
+    if not db_subcategory:
+        raise HTTPException(status_code=404, detail="Подкатегория не найдена")
+    
+    if db_subcategory.products:
+        # Soft-delete subcategory products
+        for product in db_subcategory.products:
+            product.active = False
+            
+    db_subcategory.active = False
+    await db.commit()
+    return MessageResponse(message="Подкатегория удалена")

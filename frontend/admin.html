@@ -1,0 +1,667 @@
+<!DOCTYPE html>
+<html lang="ru">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Админ-панель</title>
+    <link rel="stylesheet" href="css/styles_new.css?v=34.2">
+    <link rel="stylesheet" href="css/admin_v4.css?v=34.2">
+    <script src="js/telegram-web-app.js" defer></script>
+    <script src="js/chart.js"></script>
+</head>
+
+<body>
+    <script>
+        (function() {
+            const CURRENT_VERSION = "34.2";
+            console.log('%c ADMIN VERSION: ' + CURRENT_VERSION, 'background: #222; color: #ffaa55; font-size: 20px');
+            
+            const isWrapper = navigator.userAgent.includes('KurortnikWrapper') || window.location.search.includes('wrapper=true');
+            
+            if (isWrapper) {
+                // Внутри APK-обертки отключаем Service Worker полностью для избежания зависаний WebView
+                if (!localStorage.getItem('admin_sw_cleared_v5')) {
+                    if ('serviceWorker' in navigator) {
+                        navigator.serviceWorker.getRegistrations().then(regs => {
+                            for (let reg of regs) reg.unregister();
+                        }).catch(e => {});
+                    }
+                    if ('caches' in window) {
+                        caches.keys().then(names => {
+                            return Promise.all(names.map(name => caches.delete(name)));
+                        }).catch(e => {});
+                    }
+                    localStorage.setItem('admin_sw_cleared_v5', 'true');
+                    setTimeout(() => {
+                        window.location.reload(true);
+                    }, 300);
+                }
+                return; // Выходим, не проверяя версию
+            }
+
+            // Быстрая проверка версии через сетевой запрос в обход SW
+            fetch('/version.json?t=' + Date.now())
+                .then(res => {
+                    if (!res.ok) throw new Error('Network response was not ok');
+                    return res.json();
+                })
+                .then(data => {
+                    if (data && data.version && data.version !== CURRENT_VERSION) {
+                        console.log('Новая версия обнаружена: ' + data.version + ' (текущая: ' + CURRENT_VERSION + ')');
+                        
+                        const lastReload = sessionStorage.getItem('last_version_reload');
+                        const now = Date.now();
+                        // Защита от бесконечного цикла перезагрузок (интервал минимум 10 сек)
+                        if (!lastReload || (now - parseInt(lastReload, 10)) > 10000) {
+                            sessionStorage.setItem('last_version_reload', now.toString());
+                            
+                            // Удаляем Service Worker
+                            if ('serviceWorker' in navigator) {
+                                navigator.serviceWorker.getRegistrations().then(regs => {
+                                    for (let reg of regs) reg.unregister();
+                                });
+                            }
+                            
+                            // Очищаем кэш
+                            if ('caches' in window) {
+                                caches.keys().then(names => {
+                                    return Promise.all(names.map(name => caches.delete(name)));
+                                }).then(() => {
+                                    window.location.reload(true);
+                                });
+                            } else {
+                                window.location.reload(true);
+                            }
+                        }
+                    }
+                })
+                .catch(err => console.warn('Ошибка проверки версии:', err));
+        })();
+    </script>
+    <div id="adminApp">
+        <header class="admin-header">
+            <div class="header-title">
+                <h2>Админ-панель</h2>
+                <div class="user-info" id="adminUserInfo">Загрузка...</div>
+            </div>
+        </header>
+
+        <nav class="admin-nav">
+            <button class="nav-btn active" data-tab="orders">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round"
+                    style="margin-right: 4px; vertical-align: text-bottom;">
+                    <line x1="8" y1="6" x2="21" y2="6"></line>
+                    <line x1="8" y1="12" x2="21" y2="12"></line>
+                    <line x1="8" y1="18" x2="21" y2="18"></line>
+                    <line x1="3" y1="6" x2="3.01" y2="6"></line>
+                    <line x1="3" y1="12" x2="3.01" y2="12"></line>
+                    <line x1="3" y1="18" x2="3.01" y2="18"></line>
+                </svg>
+                Заказы
+            </button>
+            <button class="nav-btn" data-tab="analytics">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round"
+                    style="margin-right: 4px; vertical-align: text-bottom;">
+                    <line x1="18" y1="20" x2="18" y2="10"></line>
+                    <line x1="12" y1="20" x2="12" y2="4"></line>
+                    <line x1="6" y1="20" x2="6" y2="14"></line>
+                </svg>
+                Аналитика
+            </button>
+            <button class="nav-btn" data-tab="categories">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round"
+                    style="margin-right: 4px; vertical-align: text-bottom;">
+                    <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+                </svg>
+                Категории
+            </button>
+            <button class="nav-btn" data-tab="products">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round"
+                    style="margin-right: 4px; vertical-align: text-bottom;">
+                    <line x1="16.5" y1="9.4" x2="7.5" y2="4.21"></line>
+                    <path
+                        d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z">
+                    </path>
+                    <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
+                    <line x1="12" y1="22.08" x2="12" y2="12"></line>
+                </svg>
+                Товары
+            </button>
+            <button class="nav-btn" data-tab="upload">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round"
+                    style="margin-right: 4px; vertical-align: text-bottom;">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                    <polyline points="7 10 12 15 17 10"></polyline>
+                    <line x1="12" y1="15" x2="12" y2="3"></line>
+                </svg>
+                Импорт
+            </button>
+        </nav>
+
+        <main class="admin-content">
+            <!-- Unauthorized View -->
+            <div id="authView" style="display: none; text-align: center; padding: 40px;">
+                <!-- Standard Unauthorized Message (Shown by default) -->
+                <div id="standardAuthMsg">
+                    <h3 style="display: flex; align-items: center; justify-content: center; gap: 8px;">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2"
+                            stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <line x1="15" y1="9" x2="9" y2="15"></line>
+                            <line x1="9" y1="9" x2="15" y2="15"></line>
+                        </svg>
+                        Нет доступа
+                    </h3>
+                    <p>Вы не являетесь администратором.</p>
+                </div>
+
+                <!-- Manual Login Form (Shown only in standalone/dev mode when userId is not set/invalid) -->
+                <div id="manualLoginForm" style="display: none; max-width: 320px; margin: 30px auto; padding: 25px; border-radius: 16px; background: #ffffff; box-shadow: 0 10px 25px rgba(0,0,0,0.08); border: 1px solid #eaeaea; text-align: left;">
+                    <h3 style="margin-top: 0; font-size: 18px; color: #1e3a8a; text-align: center; margin-bottom: 20px;">Вход в админ-панель</h3>
+                    <div class="form-group" style="margin-bottom: 15px;">
+                        <label style="font-weight: 500; font-size: 13.5px; color: #555; display: block; margin-bottom: 6px;">Telegram ID</label>
+                        <input type="number" id="loginTelegramId" class="form-control" placeholder="Например: 1234567" style="width: 100%; height: 40px; box-sizing: border-box;">
+                    </div>
+                    <button class="btn btn-primary" id="btnSubmitLogin" style="width: 100%; height: 42px; border-radius: 8px; font-weight: 600; font-size: 14px; background: #1e3a8a; color: white; border: none; cursor: pointer;">Войти</button>
+                    <p style="font-size: 11.5px; color: #888; text-align: center; margin-top: 15px; margin-bottom: 0; line-height: 1.4;">
+                        Узнать свой ID можно в Telegram-боте по команде <code>/get_my_id</code>
+                    </p>
+                </div>
+            </div>
+
+            <!-- Orders Tab -->
+            <div id="ordersTab" class="tab-content active">
+                <!-- PWA Push Promo (Hidden by default, shown dynamically via JS for admins in PWA/Dev mode) -->
+                <div id="adminPushPromo" style="display: none; max-width: 500px; margin: 20px auto 10px auto; background: #e0f2fe; border: 1px solid #bae6fd; padding: 15px; border-radius: 12px; text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,0.05);">
+                    <p style="margin: 0 0 12px 0; font-weight: 600; color: #0369a1; font-size: 15px; display: flex; align-items: center; justify-content: center; gap: 6px;">
+                        🔔 Получать уведомления о заказах на этом устройстве?
+                    </p>
+                    <button class="btn btn-primary" id="btnSubscribeAdminPush" style="background: #0284c7; border: none; padding: 8px 24px; font-size: 13.5px; border-radius: 30px; cursor: pointer; color: white; font-weight: 500;">
+                        Включить уведомления
+                    </button>
+                </div>
+
+                <div class="section-header">
+                    <h3>Заказы покупателей</h3>
+                </div>
+                <div class="orders-filter">
+                    <button class="filter-btn active" data-status="">Все</button>
+                    <button class="filter-btn" data-status="new">Новые</button>
+                    <button class="filter-btn" data-status="processing">В работе</button>
+                    <button class="filter-btn" data-status="shipped">Отправлен</button>
+                    <button class="filter-btn" data-status="completed">Выполнен</button>
+                    <button class="filter-btn" data-status="cancelled">Отменён</button>
+                </div>
+                <div id="ordersGrid" class="orders-grid">
+                    <!-- Order cards loaded here -->
+                </div>
+                <div id="ordersEmpty" style="display: none; text-align: center; padding: 40px; color: #888;">
+                    Заказов пока нет
+                </div>
+            </div>
+
+            <!-- Categories Tab -->
+            <div id="categoriesTab" class="tab-content">
+                <div class="section-header"
+                    style="justify-content: space-between; align-items: flex-start; padding-right: 10px;">
+                    <h3>Структура каталога</h3>
+                    <div style="display: flex; flex-direction: column; align-items: flex-end; margin-top: 10px;">
+                        <button class="btn btn-primary btn-green"
+                            style="padding: 8px 20px; font-size: 14px; border-radius: 30px; box-shadow: 0 4px 12px rgba(33, 115, 70, 0.3);"
+                            onclick="Admin.openCategoryModal()">+ Категория</button>
+                    </div>
+                </div>
+                <!-- Breadcrumbs -->
+                <div id="breadcrumbs" class="breadcrumbs" style="display:none;">
+                    <span onclick="Admin.loadCategories()"
+                        style="cursor:pointer; color:var(--primary-color);">Главная</span>
+                    <span id="breadcrumbCurrent"> > Текущая</span>
+                </div>
+
+                <div id="categoriesList" class="grid-list">
+                    <!-- Categories loaded here -->
+                </div>
+
+                <div id="categoryProductsSection" style="display:none; margin-top: 30px;">
+                    <div class="section-header">
+                        <h3>Товары в этой категории</h3>
+                        <button class="btn btn-primary btn-green"
+                            style="padding: 8px 20px; font-size: 14px; border-radius: 30px; box-shadow: 0 4px 12px rgba(33, 115, 70, 0.3);"
+                            onclick="Admin.openProductModal(null, Admin.currentCategoryId)">+ Товар</button>
+                    </div>
+                    <div class="table-container">
+                        <table class="admin-table">
+                            <thead>
+                                <tr>
+                                    <th width="50">Фото</th>
+                                    <th>Товар</th>
+                                    <th>Цена</th>
+                                    <th>Показ</th>
+                                    <th>Действия</th>
+                                </tr>
+                            </thead>
+                            <tbody id="categoryProductsBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Products Tab (All) -->
+            <div id="productsTab" class="tab-content">
+                <div class="section-header"
+                    style="justify-content: space-between; align-items: flex-start; padding-right: 10px;">
+                    <h3>Все товары</h3>
+                    <!-- Aligned to be roughly under the 'Import' tab which is the 3rd tab -->
+                    <div style="display: flex; flex-direction: column; align-items: flex-end; margin-top: 10px;">
+                        <button class="btn btn-primary btn-green"
+                            style="padding: 8px 20px; font-size: 14px; border-radius: 30px; box-shadow: 0 4px 12px rgba(33, 115, 70, 0.3);"
+                            onclick="Admin.openProductModal()">+ Товар</button>
+                    </div>
+                </div>
+                <div class="search-bar">
+                    <input type="text" id="productSearch" placeholder="Поиск по названию..."
+                        oninput="Admin.searchProducts(this.value)">
+                </div>
+                <div class="orders-filter" id="productsFilterBar" style="margin-bottom: 10px;">
+                    <button class="filter-btn active" id="prodFilter-all" onclick="Admin.setProductsFilter('all')">Все</button>
+                    <button class="filter-btn" id="prodFilter-new" onclick="Admin.setProductsFilter('new')">🆕 Новинки</button>
+                    <button class="filter-btn" id="prodFilter-hidden" onclick="Admin.setProductsFilter('hidden')">👁 Скрытые</button>
+                    <button class="filter-btn" id="prodFilter-outofstock" onclick="Admin.setProductsFilter('outofstock')">📦 Нет в наличии</button>
+                </div>
+                <div class="table-container">
+                    <table class="admin-table">
+                        <thead>
+                            <tr>
+                                <th width="50">Фото</th>
+                                <th>Товар</th>
+                                <th>Артикул</th>
+                                <th>Показ</th>
+                                <th>Действия</th>
+                            </tr>
+                        </thead>
+                        <tbody id="productsTableBody">
+                            <!-- Rows loaded via JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Upload Tab -->
+            <div id="uploadTab" class="tab-content">
+                <div class="instruction-step" style="margin-bottom: 40px; text-align: center;">
+                    <p style="font-size: 16px; color: var(--text-secondary);">Подготовьте файл с товарами (Excel, CSV,
+                        ODS).</p>
+                </div>
+
+                <div class="upload-zone" id="dropZone">
+                    <div class="upload-btn-excel">
+                        <div class="upload-icon-large" style="margin-bottom: 12px;">
+                            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--primary-color)"
+                                stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                <polyline points="7 10 12 15 17 10"></polyline>
+                                <line x1="12" y1="15" x2="12" y2="3"></line>
+                            </svg>
+                        </div>
+                        <div class="upload-text-main">Загрузить таблицу</div>
+                        <div class="upload-text-sub">xlsx, xls, csv, ods, xlsb, xlsm, tsv</div>
+                    </div>
+                    <input type="file" id="fileInput" accept=".xlsx,.xls,.xlsm,.xlsb,.ods,.csv,.tsv" hidden>
+                </div>
+
+                <!-- Download Template Link -->
+                <div style="margin-top: 15px; text-align: center;">
+                    <a href="#" onclick="event.preventDefault(); Admin.downloadTemplate();"
+                        style="color: var(--primary-color); text-decoration: underline; font-size: 14px; display: inline-flex; align-items: center; gap: 6px;">
+                        <span style="display: flex; align-items: center;"><svg width="16" height="16"
+                                viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                                stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                <polyline points="7 10 12 15 17 10"></polyline>
+                                <line x1="12" y1="15" x2="12" y2="3"></line>
+                            </svg></span> Скачать образец таблицы
+                    </a>
+                </div>
+
+                <div class="upload-status" id="uploadStatus" style="margin-top: 20px;"></div>
+            </div>
+
+            <!-- Analytics Tab -->
+            <div id="analyticsTab" class="tab-content" style="display:none;">
+                <div class="section-header">
+                    <h3>Аналитика продаж</h3>
+                </div>
+
+                <!-- Stats Cards -->
+                <div class="stats-cards-grid">
+                    <div class="stats-card">
+                        <div class="stats-label">Выручка</div>
+                        <div class="stats-value" id="statsRevenue">0 ₽</div>
+                    </div>
+                    <div class="stats-card">
+                        <div class="stats-label">Заказы</div>
+                        <div class="stats-value" id="statsOrders">0</div>
+                    </div>
+                    <div class="stats-card">
+                        <div class="stats-label">Средний чек</div>
+                        <div class="stats-value" id="statsAvgCheck">0 ₽</div>
+                    </div>
+                    <div class="stats-card">
+                        <div class="stats-label">Клиенты</div>
+                        <div class="stats-value" id="statsCustomers">0</div>
+                    </div>
+                </div>
+
+                <!-- Charts Section -->
+                <div class="charts-container">
+                    <div class="chart-box main-chart">
+                        <h4>Динамика продаж (30 дней)</h4>
+                        <div style="height: 300px; position: relative;">
+                            <canvas id="salesChart"></canvas>
+                        </div>
+                    </div>
+                    <div class="chart-box side-chart">
+                        <h4>Топ-5 товаров</h4>
+                        <ul class="top-products-list" id="topProductsList">
+                            <!-- Items loaded here -->
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Modals -->
+    <div id="categoryModal" class="modal">
+        <div class="modal-content">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <h3 id="catModalTitle" style="margin:0;">Создать категорию</h3>
+                <button class="close-modal" onclick="Admin.closeModal('categoryModal')">✕</button>
+            </div>
+            <div class="form-group" style="margin-top: 15px;">
+                <label>Название</label>
+                <input type="text" id="catNameInput" class="form-control">
+            </div>
+            <div class="form-group" style="margin-top: 15px;">
+                <label>Фото категории</label>
+                <div id="catImageContainer" style="display: flex; gap: 10px; align-items: center; margin-top: 5px;">
+                    <label for="catImageUpload" class="upload-btn-interactive" style="margin: 0; padding: 8px 16px; font-size: 13px; border-radius: 4px; background: #e8f0fe; color: #1a73e8; cursor: pointer; border: 1px dashed #1a73e8;">
+                        Загрузить
+                    </label>
+                    <input type="file" id="catImageUpload" accept="image/*" hidden onchange="Admin.handleCategoryImageUpload(this.files)">
+                    <span style="color: #888; font-size: 12px;">или</span>
+                    <input type="text" id="catImageUrlInput" class="form-control" placeholder="Ссылка на картинку (URL)" style="flex: 1;" oninput="Admin.onCatImageUrlInput(this.value)">
+                </div>
+                <div id="catImagePreview" style="margin-top: 10px; position: relative; display: none; width: 80px; height: 80px;">
+                    <img id="catImgElement" src="" style="width: 100%; height: 100%; object-fit: cover; border-radius: 4px; border: 1px solid #ddd;">
+                    <button onclick="Admin.removeCategoryImage()" style="position: absolute; top: -5px; right: -5px; background: red; color: white; border: none; border-radius: 50%; width: 18px; height: 18px; line-height: 18px; cursor: pointer; font-size: 12px;">✕</button>
+                </div>
+            </div>
+            <div class="form-group" style="margin-top: 15px; display: flex; align-items: center; gap: 10px;">
+                <label class="ios-switch">
+                    <input type="checkbox" id="catHideInput">
+                    <span class="ios-slider"></span>
+                </label>
+                <span style="font-size: 14px; font-weight: 500;">Скрыть в магазине</span>
+            </div>
+            <div class="modal-actions" style="margin-top: 20px;">
+                <button class="btn" onclick="Admin.closeModal('categoryModal')">Отмена</button>
+                <button class="btn btn-primary" onclick="Admin.saveCategory()">Сохранить</button>
+            </div>
+        </div>
+    </div>
+    <div id="subcategoryModal" class="modal">
+        <div class="modal-content">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <h3 id="subcatModalTitle" style="margin:0;">Создать подкатегорию</h3>
+                <button class="close-modal" onclick="Admin.closeModal('subcategoryModal')">✕</button>
+            </div>
+            <div class="form-group" style="margin-top: 15px;">
+                <label>Название</label>
+                <input type="text" id="subcatNameInput" class="form-control">
+            </div>
+            <div class="form-group" style="margin-top: 15px;">
+                <label>Фото подкатегории</label>
+                <div id="subcatImageContainer" style="display: flex; gap: 10px; align-items: center; margin-top: 5px;">
+                    <label for="subcatImageUpload" class="upload-btn-interactive" style="margin: 0; padding: 8px 16px; font-size: 13px; border-radius: 4px; background: #e8f0fe; color: #1a73e8; cursor: pointer; border: 1px dashed #1a73e8;">
+                        Загрузить
+                    </label>
+                    <input type="file" id="subcatImageUpload" accept="image/*" hidden onchange="Admin.handleSubcategoryImageUpload(this.files)">
+                    <span style="color: #888; font-size: 12px;">или</span>
+                    <input type="text" id="subcatImageUrlInput" class="form-control" placeholder="Ссылка на картинку (URL)" style="flex: 1;" oninput="Admin.onSubcatImageUrlInput(this.value)">
+                </div>
+                <div id="subcatImagePreview" style="margin-top: 10px; position: relative; display: none; width: 80px; height: 80px;">
+                    <img id="subcatImgElement" src="" style="width: 100%; height: 100%; object-fit: cover; border-radius: 4px; border: 1px solid #ddd;">
+                    <button onclick="Admin.removeSubcategoryImage()" style="position: absolute; top: -5px; right: -5px; background: red; color: white; border: none; border-radius: 50%; width: 18px; height: 18px; line-height: 18px; cursor: pointer; font-size: 12px;">✕</button>
+                </div>
+            </div>
+            <div class="modal-actions" style="margin-top: 20px;">
+                <button class="btn" onclick="Admin.closeModal('subcategoryModal')">Отмена</button>
+                <button class="btn btn-primary" onclick="Admin.saveSubcategory()">Сохранить</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="productModal" class="modal">
+        <div class="modal-content modal-lg">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+                <h3 id="prodModalTitle" style="margin:0;">Товар</h3>
+                <button class="close-modal" onclick="Admin.closeModal('productModal')">✕</button>
+            </div>
+            <div class="form-grid">
+                <div class="form-group full-width">
+                    <label>Название *</label>
+                    <input type="text" id="prodName" class="form-control">
+                </div>
+                <div class="form-group">
+                    <label>Категория *</label>
+                    <select id="prodCategory" class="form-control" onchange="Admin.onCategoryChange()"></select>
+                </div>
+                <div class="form-group">
+                    <label>Подкатегория</label>
+                    <select id="prodSubcategory" class="form-control"></select>
+                </div>
+                <div class="form-group">
+                    <label>Цена за шт (₽) *</label>
+                    <input type="number" id="prodPrice" class="form-control">
+                </div>
+                <div class="form-group">
+                    <label>Штук в пачке *</label>
+                    <input type="number" id="prodPack" class="form-control" value="1">
+                </div>
+                <div class="form-group">
+                    <label>Остаток (пачек)</label>
+                    <input type="number" id="prodStock" class="form-control" placeholder="Пусто = ∞">
+                </div>
+                <div class="form-group">
+                    <label>Артикул</label>
+                    <input type="text" id="prodSku" class="form-control">
+                </div>
+                <div class="form-group">
+                    <label>Страна</label>
+                    <input type="text" id="prodCountry" class="form-control">
+                </div>
+                <div class="form-group">
+                    <label>Метка (Текст)</label>
+                    <input type="text" id="prodBadgeText" class="form-control" placeholder="Пример: ХИТ">
+                </div>
+                <div class="form-group">
+                    <label>Цвет метки</label>
+                    <select id="prodBadgeColor" class="form-control">
+                        <option value="">(Нет)</option>
+                        <option value="#f1c40f">Желтый</option>
+                        <option value="#2ecc71">Светло зелёный</option>
+                        <option value="#3498db">Голубой</option>
+                        <option value="#e74c3c">Красный</option>
+                        <option value="#e67e22">Оранжевый</option>
+                    </select>
+                </div>
+                <div class="form-group full-width ios-switch-container">
+                    <label for="prodActive" class="ios-switch-label">Активен (Отображается в каталоге магазина)</label>
+                    <label class="ios-switch">
+                        <input type="checkbox" id="prodActive">
+                        <span class="ios-slider"></span>
+                    </label>
+                </div>
+                <div class="form-group full-width ios-switch-container">
+                    <label for="prodIsNew" class="ios-switch-label">Новинка (Отображается в разделе «Новинки»)</label>
+                    <label class="ios-switch">
+                        <input type="checkbox" id="prodIsNew">
+                        <span class="ios-slider"></span>
+                    </label>
+                </div>
+                <div class="form-group full-width">
+                    <label>Фотографии</label>
+                    <div id="prodImagesList" style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 10px;">
+                        <!-- Images rendered here -->
+                    </div>
+                    <label for="prodImageUpload" class="upload-btn-interactive">
+                        + Добавить фото
+                    </label>
+                    <input type="file" id="prodImageUpload" accept="image/*" hidden multiple
+                        onchange="Admin.handleImageUpload(this.files)">
+                </div>
+                <div class="form-group full-width">
+                    <label>Описание</label>
+                    <textarea id="prodDesc" class="form-control" rows="3"></textarea>
+                </div>
+            </div>
+            <div class="modal-actions">
+                <button class="btn" onclick="Admin.closeModal('productModal')">Отмена</button>
+                <button class="btn btn-primary" onclick="Admin.saveProduct()">Сохранить</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Order Detail Modal -->
+    <div id="orderDetailModal" class="modal">
+        <div class="modal-content modal-lg">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+                <h3 id="orderModalTitle" style="margin:0;">Заказ</h3>
+                <button class="close-modal" onclick="Admin.closeModal('orderDetailModal')">✕</button>
+            </div>
+            <div id="orderDetailContent">
+                <!-- Order detail loaded here -->
+            </div>
+            <div class="order-status-change" style="margin-top: 20px; padding-top: 15px; border-top: 1px solid #eee;">
+                <div style="margin-bottom: 15px;">
+                    <label style="font-weight: 600; margin-right: 10px;">Менеджер:</label>
+                    <select id="orderManagerSelect" class="form-control"
+                        style="width: auto; display: inline-block; min-width: 150px;">
+                        <option value="">Не назначен</option>
+                        <option value="M1">Менеджер 1 (M1)</option>
+                        <option value="M2">Менеджер 2 (M2)</option>
+                        <option value="M3">Менеджер 3 (M3)</option>
+                        <option value="M4">Менеджер 4 (M4)</option>
+                    </select>
+                </div>
+                <div>
+                    <label style="font-weight: 600; margin-right: 10px;">Статус заказа:</label>
+                    <select id="orderStatusSelect" class="form-control"
+                        style="width: auto; display: inline-block; min-width: 150px;">
+                        <option value="new">Новый</option>
+                        <option value="processing">В работе</option>
+                        <option value="shipped">Отправлен</option>
+                        <option value="completed">Выполнен</option>
+                        <option value="cancelled">Отменён</option>
+                    </select>
+                    <button class="btn btn-primary" style="margin-left: 10px;"
+                        onclick="Admin.updateOrderStatus()">Сохранить</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bottom Navigation for Mobile -->
+    <nav class="bottom-nav admin-bottom-nav" id="adminBottomNav">
+        <div class="nav-pill">
+            <button class="nav-item active" id="adminNavOrders" data-tab="orders">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="8" y1="6" x2="21" y2="6"></line>
+                    <line x1="8" y1="12" x2="21" y2="12"></line>
+                    <line x1="8" y1="18" x2="21" y2="18"></line>
+                    <line x1="3" y1="6" x2="3.01" y2="6"></line>
+                    <line x1="3" y1="12" x2="3.01" y2="12"></line>
+                    <line x1="3" y1="18" x2="3.01" y2="18"></line>
+                </svg>
+                <span class="nav-label">Заказы</span>
+            </button>
+            <button class="nav-item" id="adminNavAnalytics" data-tab="analytics">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="18" y1="20" x2="18" y2="10"></line>
+                    <line x1="12" y1="20" x2="12" y2="4"></line>
+                    <line x1="6" y1="20" x2="6" y2="14"></line>
+                </svg>
+                <span class="nav-label">Аналитика</span>
+            </button>
+            <button class="nav-item" id="adminNavCategories" data-tab="categories">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+                </svg>
+                <span class="nav-label">Категории</span>
+            </button>
+            <button class="nav-item" id="adminNavProducts" data-tab="products">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="16.5" y1="9.4" x2="7.5" y2="4.21"></line>
+                    <path
+                        d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"
+                    ></path>
+                    <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
+                    <line x1="12" y1="22.08" x2="12" y2="12"></line>
+                </svg>
+                <span class="nav-label">Товары</span>
+            </button>
+            <button class="nav-item" id="adminNavUpload" data-tab="upload">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                    <polyline points="7 10 12 15 17 10"></polyline>
+                    <line x1="12" y1="15" x2="12" y2="3"></line>
+                </svg>
+                <span class="nav-label">Импорт</span>
+            </button>
+        </div>
+    </nav>
+
+
+    <script src="js/api.js?v=34.2"></script>
+    <script src="js/admin_v4.js?v=34.2"></script>
+    <script>
+        const isWrapper = navigator.userAgent.includes('KurortnikWrapper') || window.location.search.includes('wrapper=true');
+        if ('serviceWorker' in navigator && !isWrapper) {
+            // Force update check on load
+            navigator.serviceWorker.ready.then(reg => {
+                reg.update();
+            });
+
+            // Reload page when new service worker takes control
+            let refreshing = false;
+            navigator.serviceWorker.addEventListener('controllerchange', () => {
+                if (!refreshing) {
+                    refreshing = true;
+                    window.location.reload();
+                }
+            });
+
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('sw.js')
+                    .then(reg => console.log('Service Worker registered for Admin PWA', reg))
+                    .catch(err => console.error('Service Worker registration failed', err));
+            });
+        } else if (isWrapper) {
+            console.log('Service Worker registration skipped in Wrapper mode');
+        }
+    </script>
+</body>
+
+</html>

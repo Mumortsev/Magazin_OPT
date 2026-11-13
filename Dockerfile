@@ -1,0 +1,49 @@
+
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Set environment variables
+ENV PIP_DEFAULT_TIMEOUT=1000 \
+    PYTHONUNBUFFERED=1
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    curl \
+    dos2unix \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy backend requirements first for caching
+COPY backend/requirements.txt /app/
+
+# Install all backend requirements
+RUN pip install --no-cache-dir --default-timeout=1000 --retries 10 \
+    -r requirements.txt
+
+# Copy backend code
+COPY backend/ /app/
+
+# Ensure static directory is clean before copying frontend
+RUN rm -rf /app/static && mkdir -p /app/static
+
+# Copy frontend code to static directory (single source of truth)
+COPY frontend/ /app/static/
+
+# Copy scripts
+COPY scripts/ /app/scripts/
+
+# Fix line endings and permissions for start script
+RUN dos2unix /app/scripts/start.sh && chmod +x /app/scripts/start.sh
+
+# Create data directory
+RUN mkdir -p /data
+
+# Expose port
+EXPOSE 80
+
+# Set Python path
+ENV PYTHONPATH=/app
+
+# Start services
+CMD ["/app/scripts/start.sh"]

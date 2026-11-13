@@ -1,0 +1,26 @@
+{
+  "id": "/admin",
+  "name": "Админ Курортник",
+  "short_name": "Админ Курортник",
+  "description": "Панель управления магазином Курортник",
+  "start_url": "/admin.html?test=true&platform=desktop",
+  "display": "standalone",
+  "background_color": "#235733",
+  "theme_color": "#235733",
+  "orientation": "any",
+  "scope": "/admin.html",
+  "icons": [
+    {
+      "src": "/assets/icons/admin-icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/assets/icons/admin-icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

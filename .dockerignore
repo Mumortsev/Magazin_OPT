@@ -1,0 +1,68 @@
+# Version Control
+.git
+.gitignore
+
+# Environment Variables
+.env
+.env.*
+!.env.example
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+backend/data/*
+!backend/data/DejaVuSans.ttf
+
+# Python Cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+venv/
+.venv/
+env/
+backend/venv/
+backend/.venv/
+backend/env/
+
+# Node.js
+node_modules/
+npm-debug.log
+yarn-error.log
+frontend/node_modules/
+frontend/build/
+frontend/dist/
+
+# IDE & OS
+.idea/
+.vscode/
+.cursor/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Deployment Configs
+railway.toml
+netlify.toml
+Procfile
+amvera.yml
+
+# Logs & Temp
+*.log
+*.txt
+tmp/
+temp/
+
+# Large Files & Archives
+*.zip
+*.tar
+*.gz
+*.rar
+*.7z
+*.mp4
+*.mov
+*.avi
+*.mkv

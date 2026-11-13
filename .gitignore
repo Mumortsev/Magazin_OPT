@@ -1,0 +1,72 @@
+# Environment
+.env
+*.env.local
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+backend/shop.db
+shop.db
+/data/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+ENV/
+env/
+.venv/
+
+# IDE
+.idea/
+.vscode/
+.cursor/
+my_keys/
+*.swp
+*.swo
+
+# Logs
+*.log
+import_log.txt
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker
+docker-compose.override.yml
+
+# Uploaded files
+uploads/
+
+# Excel data files
+*.xlsx
+*.xls
+
+# Archives
+*.zip
+
+# Utilities
+ngrok*
+
+# Allow Cyrillic font to be tracked and committed
+!backend/data/DejaVuSans.ttf
+
+# Temporary scripts
+serve_frontend.py
+
+# Desktop and Mobile releases
+Kurortnik_Shop/
+Kurortnik_Admin/
+Kurortnik_Shop.apk
+Kurortnik_Admin.apk
+
+
+
+# Do not commit service account credentials or generated order PDFs
+backend/firebase-service-account.json
+backend/static/pdfs/

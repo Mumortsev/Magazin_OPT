@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+<html lang="ru">
+
+<head>
+    <script>
+        if (window.location.pathname === '/' || window.location.pathname === '') {
+            window.location.replace('/index.html' + window.location.search);
+        }
+    </script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#1e3a8a">
+    <title>Курортник - Оптовый магазин</title>
+    <link rel="manifest" href="/manifest.json?v=3">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="Курортник">
+    <link rel="apple-touch-icon" href="/assets/icons/icon-192x192.png">
+    <link rel="stylesheet" href="css/styles_new.css?v=34.2">
+    <script src="js/telegram-web-app.js" defer></script>
+</head>
+
+<body>
+    <script>
+        (function() {
+            const CURRENT_VERSION = "34.2";
+            console.log('%c CLIENT VERSION: ' + CURRENT_VERSION, 'background: #222; color: #bada55; font-size: 20px');
+            
+            const isWrapper = navigator.userAgent.includes('KurortnikWrapper') || window.location.search.includes('wrapper=true');
+            
+            if (isWrapper) {
+                // Внутри APK-обертки отключаем Service Worker полностью для избежания зависаний WebView
+                if (!localStorage.getItem('client_sw_cleared_v5')) {
+                    if ('serviceWorker' in navigator) {
+                        navigator.serviceWorker.getRegistrations().then(regs => {
+                            for (let reg of regs) reg.unregister();
+                        }).catch(e => {});
+                    }
+                    if ('caches' in window) {
+                        caches.keys().then(names => {
+                            return Promise.all(names.map(name => caches.delete(name)));
+                        }).catch(e => {});
+                    }
+                    localStorage.setItem('client_sw_cleared_v5', 'true');
+                    setTimeout(() => {
+                        window.location.reload(true);
+                    }, 300);
+                }
+                return; // Выходим, не проверяя версию
+            }
+
+            // Быстрая проверка версии через сетевой запрос в обход SW
+            fetch('/version.json?t=' + Date.now())
+                .then(res => {
+                    if (!res.ok) throw new Error('Network response was not ok');
+                    return res.json();
+                })
+                .then(data => {
+                    if (data && data.version && data.version !== CURRENT_VERSION) {
+                        console.log('Новая версия обнаружена: ' + data.version + ' (текущая: ' + CURRENT_VERSION + ')');
+                        
+                        const lastReload = sessionStorage.getItem('last_version_reload');
+                        const now = Date.now();
+                        // Защита от бесконечного цикла перезагрузок (интервал минимум 10 сек)
+                        if (!lastReload || (now - parseInt(lastReload, 10)) > 10000) {
+                            sessionStorage.setItem('last_version_reload', now.toString());
+                            
+                            // Удаляем Service Worker
+                            if ('serviceWorker' in navigator) {
+                                navigator.serviceWorker.getRegistrations().then(regs => {
+                                    for (let reg of regs) reg.unregister();
+                                });
+                            }
+                            
+                            // Очищаем кэш
+                            if ('caches' in window) {
+                                caches.keys().then(names => {
+                                    return Promise.all(names.map(name => caches.delete(name)));
+                                }).then(() => {
+                                    window.location.reload(true);
+                                });
+                            } else {
+                                window.location.reload(true);
+                            }
+                        }
+                    }
+                })
+                .catch(err => console.warn('Ошибка проверки версии:', err));
+        })();
+    </script>
+    <div id="debug-console"
+        style="position:fixed; bottom:0; left:0; right:0; background:rgba(0,0,0,0.8); color:red; font-size:12px; padding:10px; z-index:9999; max-height:150px; overflow:auto; display:none;">
+    </div>
+    <script>
+        window.onerror = function (msg, url, line) {
+            var d = document.getElementById('debug-console');
+            d.style.display = 'block';
+            d.innerHTML += 'E: ' + msg + ' (' + line + ')<br>';
+            return false;
+        };
+        window.addEventListener('unhandledrejection', function (e) {
+            var d = document.getElementById('debug-console');
+            d.style.display = 'block';
+            d.innerHTML += 'UR: ' + e.reason + '<br>';
+        });
+    </script>
+    <div id="app">
+
+        <!-- Android In-App Redirect Screen -->
+        <div id="androidRedirectOverlay" class="privacy-overlay hidden">
+            <div class="privacy-sheet redirect-sheet" style="text-align: center;">
+                <div class="privacy-puller"></div>
+                <div class="spinner-container" style="margin: 20px auto;">
+                    <div class="spinner" style="width: 50px; height: 50px; border-width: 4px; border-top-color: var(--primary-color);"></div>
+                </div>
+                <h2 class="privacy-title">Открываем в браузере Chrome</h2>
+                <p class="privacy-text" style="margin-bottom: 20px;">
+                    Для установки приложения мы автоматически перенаправляем вас в браузер Google Chrome...
+                </p>
+                <div class="privacy-actions" style="width: 100%;">
+                    <a id="androidRedirectLink" href="#" class="btn btn-primary btn-block" style="text-decoration: none; display: flex; align-items: center; justify-content: center; height: 48px;">Открыть вручную</a>
+                </div>
+            </div>
+        </div>
+
+        <!-- iOS In-App Guide Screen -->
+        <div id="iosInAppOverlay" class="privacy-overlay hidden">
+            <div class="privacy-sheet guide-sheet">
+                <div class="privacy-puller"></div>
+                <div class="guide-logo-container" style="text-align: center; margin-top: 10px; margin-bottom: 10px;">
+                    <img src="/assets/icons/icon-192x192.png" alt="Logo" style="width: 70px; height: 70px; border-radius: 14px; box-shadow: 0 4px 12px rgba(0,0,0,0.15);">
+                </div>
+                <h2 class="privacy-title" style="text-align: center; font-size: 22px;">Открыть в Safari</h2>
+                <p class="privacy-text" style="text-align: center; margin-bottom: 10px; padding: 0 10px;">
+                    Пожалуйста, откройте страницу в Safari для установки приложения на ваш экран.
+                </p>
+                
+                <div class="guide-steps" style="display: flex; flex-direction: column; gap: 16px; margin: 15px 0;">
+                    <div class="guide-step" style="display: flex; align-items: center; gap: 14px; background: rgba(27, 58, 95, 0.05); padding: 12px; border-radius: 12px; border: 1px solid rgba(27, 58, 95, 0.1);">
+                        <div class="guide-step-number" style="width: 28px; height: 28px; background: var(--primary-color); color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; flex-shrink: 0;">1</div>
+                        <div class="guide-step-text" style="font-size: 14px; color: var(--text-primary); line-height: 1.4;">
+                            Нажмите кнопку меню <strong>«Поделиться»</strong> <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#007aff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block; vertical-align:middle; margin:0 2px;"><rect x="5" y="9" width="14" height="12" rx="2" ry="2"></rect><path d="M12 2v13M9 5l3-3 3 3"></path></svg> (или кнопку меню <strong style="font-size: 18px;">...</strong>) в углу экрана.
+                        </div>
+                    </div>
+                    
+                    <div class="guide-step" style="display: flex; align-items: center; gap: 14px; background: rgba(27, 58, 95, 0.05); padding: 12px; border-radius: 12px; border: 1px solid rgba(27, 58, 95, 0.1);">
+                        <div class="guide-step-number" style="width: 28px; height: 28px; background: var(--primary-color); color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; flex-shrink: 0;">2</div>
+                        <div class="guide-step-text" style="font-size: 14px; color: var(--text-primary); line-height: 1.4;">
+                            В открывшемся списке выберите пункт <strong>«Открыть в Safari»</strong>.
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="privacy-actions" style="margin-top: 10px;">
+                    <button id="iosInAppCloseBtn" class="privacy-decline-btn" style="width: 100%; margin: 0; padding: 12px; border-radius: 12px; font-size: 15px; background: rgba(0,0,0,0.05);">Продолжить в этом браузере</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- PWA Install Banner (Unified) -->
+        <div id="pwaInstallBanner" class="pwa-install-banner hidden">
+            <button class="pwa-install-close" id="pwaInstallCloseBtn">&times;</button>
+            <div class="pwa-install-body">
+                <div class="pwa-install-icon-wrapper">
+                    <img src="/assets/icons/icon-72x72.png" alt="App Icon" class="pwa-install-app-icon">
+                </div>
+                <div class="pwa-install-text">
+                    <strong class="pwa-install-title">Установите «Курортник»</strong>
+                    <span id="pwaInstallDescription">Установите приложение на экран телефона для быстрого доступа.</span>
+                </div>
+            </div>
+            <div class="pwa-install-actions">
+                <button id="pwaInstallBtn" class="btn btn-primary btn-sm" style="background-color: #1B3A5F; color: #ffffff; border: none; border-radius: 10px; height: 38px; font-size: 13.5px; font-weight: 600; cursor: pointer; width: 100%; display: flex; align-items: center; justify-content: center; padding: 0;">Установить</button>
+            </div>
+        </div>
+
+        <!-- Privacy Consent Modal -->
+        <div id="privacyConsentModal" class="privacy-overlay hidden">
+            <div class="privacy-sheet">
+                <div class="privacy-puller"></div>
+                <h2 class="privacy-title">Магазин Курортник</h2>
+                <p class="privacy-text">
+                    Для доступа к ценам и оформлению заказов, пожалуйста, подтвердите согласие с правилами торговой платформы.
+                </p>
+                <label class="privacy-checkbox-label">
+                    <input type="checkbox" id="privacyCheckbox">
+                    <span>
+                        Я согласен с <a href="#" id="privacyTextLink" class="privacy-link">Политикой конфиденциальности</a> и условиями обработки данных.
+                    </span>
+                </label>
+                <div class="privacy-actions">
+                    <button id="privacyAcceptBtn" class="privacy-accept-btn" disabled>Перейти к покупкам</button>
+                    <button id="privacyDeclineBtn" class="privacy-decline-btn">Закрыть магазин</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Privacy Text Content Modal (Inner overlay) -->
+        <div id="privacyTextModal" class="privacy-overlay hidden">
+            <div class="privacy-sheet privacy-text-sheet">
+                <div class="privacy-puller"></div>
+                <h2 class="privacy-title" style="font-size: 18px; line-height: 1.3;">ПОЛИТИКА В ОТНОШЕНИИ ОБРАБОТКИ ПЕРСОНАЛЬНЫХ ДАННЫХ<br><span style="font-size: 13px; font-weight: 500; opacity: 0.8; display: block; margin-top: 4px;">в интернет-магазине «Курортник» (Telegram Mini App)</span></h2>
+                <div class="privacy-scroll-content">
+                    <p><strong>1. ОБЩИЕ ПОЛОЖЕНИЯ</strong><br>
+                    1.1. Настоящая Политика составлена в соответствии с требованиями Федерального закона от 27.07.2006 № 152-ФЗ «О персональных данных» и определяет порядок обработки персональных данных и меры по обеспечение их безопасности, предпринимаемые Оператором: ИП Худоян В.О. (ИНН: 230800898998, ОГРНИП: 306230805700010), адрес электронной почты: <a href="mailto:arsgift@mail.ru" class="privacy-link">arsgift@mail.ru</a> (далее — Оператор).<br>
+                    1.2. Оператор ставит важнейшей целью и условием осуществления своей деятельности соблюдение прав и свобод человека и гражданина при обработке его персональных данных, в том числе защиты прав на неприкосновенность частной жизни, личную и семейную тайну.</p>
+
+                    <p><strong>2. КАТЕГОРИИ ОБРАБАТЫВАЕМЫХ ПЕРСОНАЛЬНЫХ ДАННЫХ</strong><br>
+                    Для обеспечения доступа к каталогу и выполнения заказов Оператор обрабатывает следующие персональные данные Пользователя, передаваемые через интерфейс платформы Telegram:
+                    <ul style="padding-left: 20px; margin: 8px 0; list-style-type: disc;">
+                        <li>Имя и Фамилия (указанные Пользователем при регистрации или подтягиваемые из профиля Telegram);</li>
+                        <li>Номер контактного телефона;</li>
+                        <li>Адрес электронной почты (E-mail);</li>
+                        <li>Адрес доставки товаров (склад, торговая точка или терминал ТК);</li>
+                        <li>Идентификатор пользователя в мессенджере Telegram (User ID) и сетевое имя (@username).</li>
+                    </ul></p>
+
+                    <p><strong>3. ЦЕЛИ ОБРАБОТКИ ПЕРСОНАЛЬНЫХ ДАННЫХ</strong><br>
+                    Обработка персональных данных Пользователя осуществляется строго для достижения следующих конкретных целей:<br>
+                    3.1. Идентификация и регистрация: Регистрация Пользователя в качестве покупателя в системе интернет-магазина «Курортник», создание личного кабинета, предоставление доступа к каталогу цен и индивидуальным условиям закупки.<br>
+                    3.2. Заключение и исполнение договоров: Оформление заказов, выставление счетов, формирование товарно-транспортных накладных и иных закрывающих документов.<br>
+                    3.3. Организация логистики: Передача необходимых данных транспортным компаниям и курьерским службам для осуществления доставки заказанных партий товара до клиента.<br>
+                    3.4. Коммерческая коммуникация: Направление Пользователю прайс-листов, уведомлений о статусе сборки и отгрузки заказа, а также информации о сезонных поступлениях товаров для курортов.</p>
+
+                    <p><strong>4. ПРАВОВЫЕ ОСНОВАНИЯ ОБРАБОТКИ</strong><br>
+                    Правовыми основаниями обработки персональных данных являются:
+                    <ul style="padding-left: 20px; margin: 8px 0; list-style-type: disc;">
+                        <li>Конституция Российской Федерации;</li>
+                        <li>Гражданский кодекс Российской Федерации;</li>
+                        <li>Федеральный закон № 152-ФЗ «О персональных данных»;</li>
+                        <li>Согласие Пользователя на обработку его персональных данных, предоставляемое путем проставления отметки (галочки) в специальном поле при первом запуске Telegram Mini App «Курортник».</li>
+                    </ul></p>
+
+                    <p><strong>5. УСЛОВИЯ И ПОРЯДОК ОБРАБОТКИ (ПЕРЕДАЧА ТРЕТЬИМ ЛИЦАМ)</strong><br>
+                    5.1. Обработка персональных данных осуществляется с использованием средств автоматизации. Оператор осуществляет хранение и обработку баз данных строго на серверах, расположенных на территории Российской Федерации.<br>
+                    5.2. Для выполнения обязательств по доставке грузов Оператор вправе передавать персональные данные Пользователя (Имя, телефон, адрес доставки) третьим лицам — транспортно-логистическим компаниям (включая, но не ограничиваясь: СДЭК, Деловые Линии, ПЭК, Байкал Сервис) исключительно в рамках выполнения конкретного заказа.<br>
+                    5.3. Передача данных третьим лицам в коммерческих целях (продажа баз данных, спам-рассылки сторонних сервисов) категорически запрещена.</p>
+
+                    <p><strong>6. СРОКИ ОБРАБОТКИ И УНИЧТОЖЕНИЕ ДАННЫХ</strong><br>
+                    6.1. Обработка персональных данных осуществляется на неограниченный срок, но не дольше, чем это необходимо для достижения целей обработки, указанных в п. 3 настоящей Политики.<br>
+                    6.2. Пользователь может в любой момент отозвать свое согласие на обработку персональных данных, направив Оператору уведомление посредством электронной почты на адрес: <a href="mailto:arsgift@mail.ru" class="privacy-link">arsgift@mail.ru</a> с пометкой «Отзыв согласия на обработку персональных данных».<br>
+                    6.3. При получении такого уведомления Оператор обязуется прекратить обработку данных и полностью уничтожить их из системы в течение 10 рабочих дней, что повлечет за собой удаление аккаунта покупателя.</p>
+                </div>
+                <button id="privacyTextCloseBtn" class="privacy-accept-btn">Вернуться к согласию</button>
+            </div>
+        </div>
+
+        <!-- Header -->
+        <header class="header" style="display: none;">
+            <!-- Header items in one row -->
+            <div class="header-top">
+                <!-- Catalog Button Left -->
+                <div class="logo-container">
+                    <button id="headerCatalogBtn" class="header-catalog-btn">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2" style="margin-right: 8px;">
+                            <rect x="3" y="3" width="7" height="7"></rect>
+                            <rect x="14" y="3" width="7" height="7"></rect>
+                            <rect x="14" y="14" width="7" height="7"></rect>
+                            <rect x="3" y="14" width="7" height="7"></rect>
+                        </svg>
+                        Каталог
+                    </button>
+                </div>
+
+                <!-- Search Right -->
+                <div class="search-container" id="searchContainer"
+                    style="margin-left: 12px; margin-bottom: 0; flex: 1;">
+                    <input type="text" class="search-input" id="searchInput" placeholder="Поиск">
+                    <button class="search-clear" id="searchClear" style="display: none;">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                            <line x1="18" y1="6" x2="6" y2="18"></line>
+                            <line x1="6" y1="6" x2="18" y2="18"></line>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Sort Row Removed -->
+
+        </header>
+
+        <!-- Main Content -->
+        <main class="main-content no-header" id="mainContent">
+            <!-- Categories View (new default) -->
+            <div class="view" id="categoriesView">
+                <div id="mainCategorySection">
+                    <h2 class="view-title" style="margin-left: 12px; margin-top: 12px;">Категории</h2>
+                    <div class="categories-grid" id="mainCategoriesGrid"></div>
+                </div>
+
+                <div id="subcategorySection" style="display: none;">
+                    <button class="back-button" id="subcategoriesBackBtn" style="margin-left: 12px; margin-top: 12px;"
+                        onclick="Catalog.backToMainCategories()">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M19 12H5M12 19l-7-7 7-7" />
+                        </svg>
+                        Все категории
+                    </button>
+                    <h2 class="view-title" id="subcategoryTitle" style="margin-left: 12px; margin-top: 12px;">
+                        Подкатегории</h2>
+                    <div class="categories-grid" id="subCategoriesGrid"></div>
+                </div>
+            </div>
+
+            <!-- Products View -->
+            <div class="view hidden" id="productsView">
+                <button class="back-button" id="productsBackBtn" style="margin-left: 12px; margin-top: 12px;">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M19 12H5M12 19l-7-7 7-7" />
+                    </svg>
+                    Категории
+                </button>
+
+                <!-- Categories Swipe (Subcategories) for products view -->
+                <div class="categories-swipe" id="subcategoriesSwipe" style="display: none;"></div>
+
+                <!-- Products Grid -->
+                <div class="products-grid" id="productsGrid">
+                    <!-- Products loaded here -->
+                </div>
+
+                <div class="load-more-container" style="padding: 10px 0;">
+                    <button id="loadMoreBtn" class="btn btn-secondary btn-block" style="display: none;"
+                        onclick="Catalog.loadMoreProducts()">Показать еще</button>
+                </div>
+
+                <!-- Loading -->
+                <div class="loading" id="productsLoading" style="display: none;">
+                    <div class="spinner"></div>
+                </div>
+
+                <!-- No products -->
+                <div class="no-products" id="noProducts" style="display: none;">
+                    <p>Товары не найдены</p>
+                </div>
+            </div>
+
+            <!-- Product Detail View (legacy, kept for backward compatibility) -->
+            <div class="view hidden" id="productView">
+                <button class="back-button" id="productBackBtn">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M19 12H5M12 19l-7-7 7-7" />
+                    </svg>
+                    Назад
+                </button>
+                <div class="product-detail" id="productDetail">
+                    <!-- Product detail loaded here -->
+                </div>
+            </div>
+
+            <!-- Cart View -->
+            <div class="view hidden" id="cartView">
+                <button class="back-button" id="cartBackBtn">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M19 12H5M12 19l-7-7 7-7" />
+                    </svg>
+                    Назад в каталог
+                </button>
+                <h2 class="view-title">Корзина</h2>
+                <div class="cart-items" id="cartItems">
+                    <!-- Cart items loaded here -->
+                </div>
+                <div class="cart-empty" id="cartEmpty" style="display: none;">
+                    <div class="cart-empty-icon">🛒</div>
+                    <p>Корзина пуста</p>
+                    <button class="btn btn-primary" onclick="App.showCatalog()">Перейти в каталог</button>
+                </div>
+                <div class="cart-footer" id="cartFooter" style="display: none;">
+                    <div class="cart-total">
+                        <span>Итого:</span>
+                        <span class="cart-total-amount" id="cartTotal">0₽</span>
+                    </div>
+                    <button class="btn btn-primary btn-block" id="checkoutBtn">Оформить заказ</button>
+                </div>
+            </div>
+
+            <!-- Checkout View -->
+            <div class="view hidden" id="checkoutView">
+                <button class="back-button" id="checkoutBackBtn">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M19 12H5M12 19l-7-7 7-7" />
+                    </svg>
+                    Назад в корзину
+                </button>
+                <h2 class="view-title">Оформление заказа</h2>
+                <form class="checkout-form" id="checkoutForm">
+                    <div class="form-group">
+                        <label for="customerName">Ф.И.О. <span class="required">*</span></label>
+                        <input type="text" id="customerName" required placeholder="Иванов Иван Иванович">
+                    </div>
+                    <div class="form-group">
+                        <label for="customerPhone">Телефон <span class="required">*</span></label>
+                        <input type="tel" id="customerPhone" required placeholder="+7 (900) 123-45-67">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="customerComment">Комментарий к заказу</label>
+                        <textarea id="customerComment" placeholder="Дополнительная информация..."></textarea>
+                    </div>
+
+                    <div class="checkout-summary" id="checkoutSummary">
+                        <!-- Order summary -->
+                    </div>
+
+                    <button type="submit" class="btn btn-primary btn-block">Подтвердить заказ</button>
+                </form>
+            </div>
+
+            <!-- Profile View -->
+            <div class="view hidden" id="profileView">
+                <button class="back-button" id="profileBackBtn">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M19 12H5M12 19l-7-7 7-7" />
+                    </svg>
+                    Назад в каталог
+                </button>
+                <h2 class="view-title">Личный кабинет</h2>
+
+
+                <!-- Authorized -->
+                <div class="profile-info" id="profileInfo" style="display: none;">
+                    <div class="profile-header">
+                        <div class="profile-avatar" id="profileAvatar">👤</div>
+                        <div class="profile-name" id="profileName">Пользователь</div>
+                        <div class="profile-id" id="profileId">ID: —</div>
+                    </div>
+                    <button class="btn btn-secondary btn-block" id="logoutBtn">Выйти</button>
+                </div>
+
+                <div id="profileInstallSection" class="profile-install-section" style="margin-top: 15px; margin-bottom: 20px; display: none;">
+                    <button id="profileInstallBtn" class="btn btn-primary btn-block" style="display: flex; align-items: center; justify-content: center; gap: 8px; margin: 15px 0; background-color: #1B3A5F; color: #ffffff; border: none; border-radius: 30px; height: 54px; font-size: 16px; font-weight: 600; cursor: pointer; width: 100%;">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                        Установить приложение на телефон
+                    </button>
+                </div>
+
+                <!-- Orders History -->
+                <div class="orders-section">
+                    <h3>История заказов</h3>
+                    <div class="orders-list" id="ordersList">
+                        <!-- Orders loaded here -->
+                    </div>
+                    <div class="orders-empty" id="ordersEmpty" style="display: none;">
+                        <p>У вас пока нет заказов</p>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- Product Modal -->
+        <div class="product-modal" id="productModal">
+            <div class="product-modal-backdrop" id="modalBackdrop"></div>
+            <div class="product-modal-content">
+                <button class="modal-close-btn" id="modalCloseBtn">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M18 6L6 18M6 6l12 12" />
+                    </svg>
+                    <span>Закрыть</span>
+                </button>
+                <button class="modal-cart-btn" id="modalCartBtn">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="8" cy="21" r="1" />
+                        <circle cx="19" cy="21" r="1" />
+                        <path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12" />
+                    </svg>
+                    <span class="cart-badge" id="modalCartBadge" style="display: none;">0</span>
+                </button>
+                <div class="product-detail" id="modalProductDetail">
+                    <!-- Product detail loaded here -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Order Detail Modal -->
+        <div class="order-modal" id="orderModal">
+            <div class="order-modal-backdrop" id="orderModalBackdrop"></div>
+            <div class="order-modal-content">
+                <button class="modal-close-btn" id="orderModalCloseBtn">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M18 6L6 18M6 6l12 12" />
+                    </svg>
+                    <span>Закрыть</span>
+                </button>
+                <div class="order-detail" id="orderDetailContent">
+                    <!-- Order detail loaded here -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Catalog Menu Modal -->
+        <div class="catalog-menu-modal" id="catalogMenuModal">
+            <div class="catalog-menu-header">
+                <button class="menu-back-btn" id="menuBackBtn" style="display: none;">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M19 12H5M12 19l-7-7 7-7" />
+                    </svg>
+                </button>
+                <h2 class="menu-title" id="menuTitle">Каталог</h2>
+                <button class="menu-close-btn" id="menuCloseBtn">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
+            </div>
+            <div class="catalog-menu-content" id="catalogMenuContent">
+                <!-- Categories/Subcategories list -->
+            </div>
+        </div>
+
+        <!-- Bottom Navigation -->
+        <nav class="bottom-nav" id="bottomNav">
+            <div class="nav-pill">
+                <button class="nav-item active" id="navCategories" data-view="categoriesView">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <rect width="7" height="7" x="3" y="3" rx="1" />
+                        <rect width="7" height="7" x="14" y="3" rx="1" />
+                        <rect width="7" height="7" x="14" y="14" rx="1" />
+                        <rect width="7" height="7" x="3" y="14" rx="1" />
+                    </svg>
+                </button>
+                <button class="nav-item" id="navCart" data-view="cartView">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="8" cy="21" r="1" />
+                        <circle cx="19" cy="21" r="1" />
+                        <path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12" />
+                    </svg>
+                    <span class="nav-badge" id="navCartBadge" style="display: none;">0</span>
+                </button>
+                <button class="nav-item" id="navProfile" data-view="profileView">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" />
+                        <circle cx="12" cy="7" r="4" />
+                    </svg>
+                </button>
+            </div>
+        </nav>
+
+        <!-- Toast -->
+        <div class="toast" id="toast"></div>
+
+        <!-- Scroll to top -->
+        <button class="scroll-top" id="scrollTop" style="display: none;">↑</button>
+    </div>
+
+    <script src="js/api.js?v=34.2"></script>
+    <script src="js/cart.js?v=34.2"></script>
+    <script src="js/catalog.js?v=34.2"></script>
+    <script src="js/app.js?v=34.2"></script>
+</body>
+
+</html>
