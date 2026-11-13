@@ -1,3 +1,11 @@
+## Новая оптовая витрина
+
+Сайт: https://mumortsev.github.io/Magazin_OPT/
+
+Исходники и инструкция: [storefront/README.md](storefront/README.md). Оригинальное мини-приложение сохранено ниже и в существующих папках.
+
+---
+
 # Telegram Mini App Store 🛍️
 
 Магазин в виде Telegram Mini App с админ-панелью через бота.
