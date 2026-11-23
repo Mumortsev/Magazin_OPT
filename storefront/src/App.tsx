@@ -1,11 +1,11 @@
 import {lazy, Suspense, useEffect, useRef, useState, type FormEvent} from 'react';
-import {Check, Grid2X2, List, Package, Phone, Search, ShoppingBag, Trash2} from 'lucide-react';
+import {Check, Package, Phone, Search, ShoppingBag, Trash2} from 'lucide-react';
 import {adminRoot, api, canOrder, demoMode, money, packLimit, phoneHref, type Category, type Content, type Product} from './data';
 import {CartProvider, useCart} from './cart';
 import {Breadcrumb, ConfirmDialog, Empty, Photo, ProductCard, Quantity} from './ui';
 
 const Admin = lazy(() => import('./admin'));
-type ProductPageData = {items: Product[]; total: number; pages: number};
+type ProductPageData = {items: Product[]; pages: number};
 
 function useData<T>(path: string) {
   const [state, setState] = useState<{path: string; data?: T; error?: string}>();
@@ -29,18 +29,18 @@ function useRoute() {
   return route;
 }
 
-function Header({content}: {content?: Content}) {
+function Header({content, showSearch}: {content?: Content; showSearch: boolean}) {
   const {lines} = useCart();
   const [search, setSearch] = useState('');
-  return <header className="header"><div className="header-inner live-header">
+  return <header className="header"><div className={`header-inner live-header${showSearch ? '' : ' live-header--without-search'}`}>
     <a href="#/" className="brand">курортник<span className="brand-dot">.</span><small>ОПТОВЫЙ МАГАЗИН</small></a>
-    <form className="search-field" onSubmit={event => {
+    {showSearch&&<form className="search-field" onSubmit={event => {
       event.preventDefault();
       location.hash = '/catalog?q=' + encodeURIComponent(search.trim());
     }}>
       <Search size={20}/><input type="search" aria-label="Название или артикул" placeholder="Название или артикул" value={search} onChange={event => setSearch(event.target.value)}/>
       <button aria-label="Найти товар"><Search size={20}/></button>
-    </form>
+    </form>}
     <nav aria-label="Основная навигация"><a href="#/catalog">Каталог</a><a href="#/conditions">Условия</a><a href="#/contacts">Контакты</a></nav>
     <div className="header-actions">
       {content?.phone && <a className="header-phone" href={phoneHref(content.phone)} aria-label={'Позвонить ' + content.phone}><Phone size={20}/></a>}
@@ -92,8 +92,12 @@ function Home({content, categories}: {content: Content; categories: Category[]})
   </>;
 }
 
+function showsCatalogProducts(query: URLSearchParams) {
+  return query.get('all') === '1' || !!query.get('category') || !!query.get('q')?.trim() || query.get('new') === '1';
+}
+
 function Catalog({query, categories}: {query: URLSearchParams; categories: Category[]}) {
-  if (query.get('all') === '1' || query.get('category') || query.get('q')?.trim() || query.get('new') === '1') {
+  if (showsCatalogProducts(query)) {
     return <CatalogProducts query={query} categories={categories}/>;
   }
 
@@ -110,36 +114,35 @@ function Catalog({query, categories}: {query: URLSearchParams; categories: Categ
 function CatalogProducts({query, categories}: {query: URLSearchParams; categories: Category[]}) {
   const [draft, setDraft] = useState(query.get('q') ?? '');
   const [search, setSearch] = useState(draft);
-  const [category, setCategory] = useState(query.get('category') ?? '');
-  const [subcategory, setSubcategory] = useState('');
   const [sort, setSort] = useState('name');
-  const [stock, setStock] = useState('');
-  const [newOnly, setNewOnly] = useState(query.get('new') === '1');
-  const [country, setCountry] = useState('');
-  const [view, setView] = useState<'grid' | 'list'>('grid');
   const [page, setPage] = useState(1);
-  const filters = new URLSearchParams({q:search, category, subcategory, sort, stock, country, newest:String(newOnly), page:String(page)});
-  for (const key of ['category', 'subcategory']) if (!filters.get(key)) filters.delete(key);
+  const category = query.get('category');
+  const newOnly = query.get('new') === '1';
+  const filters = new URLSearchParams({q:search, sort, newest:String(newOnly), page:String(page)});
+  if (category) filters.set('category', category);
   const result = useData<ProductPageData>('/shop/products?' + filters);
   const selectedCategory = categories.find(item => String(item.id) === category);
-  const children = selectedCategory?.subcategories ?? [];
   const title = selectedCategory?.name ?? (search ? 'Результаты поиска' : newOnly ? 'Новинки' : 'Все товары');
 
   return <div className="container catalog-page"><Breadcrumb name={title} parent="Каталог"/><h1>{title}</h1>
-    <form className="catalog-search search-field" onSubmit={event => { event.preventDefault(); setSearch(draft.trim()); setPage(1); }}>
-      <Search size={24}/><input type="search" aria-label="Поиск по названию или артикулу" placeholder="Название или артикул" value={draft} onChange={event => setDraft(event.target.value)}/><button className="button">Найти</button>
+    <form className="catalog-controls" onSubmit={event => {
+      event.preventDefault();
+      setSearch(draft.trim());
+      setPage(1);
+    }}>
+      <div className="search-field">
+        <input type="search" aria-label="Поиск по названию или артикулу" placeholder="Поиск" value={draft} onChange={event => setDraft(event.target.value)}/>
+        <button className="button" type="submit" aria-label="Найти товар"><Search size={20}/></button>
+      </div>
+      <select aria-label="Сортировка товаров" value={sort} onChange={event => {setSort(event.target.value); setPage(1);}}>
+        <option value="name">По названию</option>
+        <option value="price_asc">Дешевле</option>
+        <option value="price_desc">Дороже</option>
+        <option value="newest">Новинки</option>
+      </select>
     </form>
-    <div className="live-filters">
-      <label>Категория<select value={category} onChange={event => {setCategory(event.target.value); setSubcategory(''); setPage(1);}}><option value="">Все категории</option>{categories.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
-      {children.length > 0 && <label>Подкатегория<select value={subcategory} onChange={event => {setSubcategory(event.target.value); setPage(1);}}><option value="">Все подкатегории</option>{children.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>}
-      <label>Наличие<select value={stock} onChange={event => {setStock(event.target.value); setPage(1);}}><option value="">Любое</option><option value="yes">В наличии</option><option value="no">Нет в наличии</option></select></label>
-      <label>Страна<input value={country} onChange={event => {setCountry(event.target.value); setPage(1);}}/></label>
-      <label>Сортировка<select value={sort} onChange={event => {setSort(event.target.value); setPage(1);}}><option value="name">По названию</option><option value="price_asc">Сначала дешевле</option><option value="price_desc">Сначала дороже</option><option value="newest">Сначала новые</option></select></label>
-      <label className="check-label"><input type="checkbox" checked={newOnly} onChange={event => {setNewOnly(event.target.checked); setPage(1);}}/> Только новинки</label>
-    </div>
-    <div className="catalog-toolbar"><span role="status">{result?.data && `Найдено: ${result.data.total}`}</span><div className="view-switch"><button aria-label="Плиткой" aria-pressed={view==='grid'} onClick={()=>setView('grid')}><Grid2X2/></button><button aria-label="Списком" aria-pressed={view==='list'} onClick={()=>setView('list')}><List/></button></div></div>
     {!result?.data ? <Feedback error={result?.error}/> : result.data.items.length
-      ? <div className={view === 'list' ? 'product-list' : 'product-grid'}>{result.data.items.map(product => <ProductCard list={view==='list'} key={product.id} p={product}/>)}</div>
+      ? <div className="product-grid">{result.data.items.map(product => <ProductCard key={product.id} p={product}/>)}</div>
       : <p>Товары по этим условиям не найдены.</p>}
     {result?.data && result.data.pages > 1 && <nav className="pagination" aria-label="Страницы каталога"><button disabled={page===1} onClick={()=>setPage(page-1)}>Назад</button><span>{page} из {result.data.pages}</span><button disabled={page>=result.data.pages} onClick={()=>setPage(page+1)}>Далее</button></nav>}
   </div>;
@@ -232,6 +235,7 @@ function Info({path, content}: {path: string; content: Content}) {
 function Site() {
   const route = useRoute();
   const [path, search] = route.split('?');
+  const query = new URLSearchParams(search);
   const landing = useData<{content: Content; categories: Category[]}>('/shop/home');
   const {notice} = useCart();
   const main = useRef<HTMLElement>(null);
@@ -246,9 +250,9 @@ function Site() {
     document.querySelector('meta[name="description"]')?.setAttribute('content', content.description);
   }, [path,content]);
   return <>{demoMode&&<div className="demo-banner">Демонстрация магазина. Тестовые товары и заявки сохраняются только в этом браузере.</div>}<a className="skip-link" href="#main" onClick={event=>{event.preventDefault();main.current?.focus();}}>Перейти к содержимому</a>
-    <Header content={content}/><main id="main" ref={main} tabIndex={-1}>
+    <Header content={content} showSearch={path !== '/catalog' || !showsCatalogProducts(query)}/><main id="main" ref={main} tabIndex={-1}>
       {path === '/cart' || path === '/checkout' ? <CartPage/> : path.startsWith('/product/') ? <ProductPage key={path} id={path.split('/')[2]}/> : !landing?.data ? <div className="container info-page"><Feedback error={landing?.error}/></div>
-        : path === '/' ? <Home {...landing.data}/> : path === '/catalog' ? <Catalog key={route} query={new URLSearchParams(search)} categories={landing.data.categories}/> : <Info path={path} content={landing.data.content}/>}
+        : path === '/' ? <Home {...landing.data}/> : path === '/catalog' ? <Catalog key={route} query={query} categories={landing.data.categories}/> : <Info path={path} content={landing.data.content}/>}
     </main><Footer content={content}/><div className={`toast ${notice?'toast--visible':''}`} role="status">{notice&&<><Check size={20}/><span>{notice}</span><a href="#/cart">К корзине</a></>}</div></>;
 }
 
