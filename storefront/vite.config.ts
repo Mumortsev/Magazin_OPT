@@ -1,10 +1,12 @@
 import {defineConfig, loadEnv} from 'vite';
 import react from '@vitejs/plugin-react';
+import {fileURLToPath} from 'node:url';
 
 export default defineConfig(({mode}) => {
-  const pages = mode === 'github-pages';
+  const demo = mode === 'github-pages-demo';
+  const pages = demo || mode === 'github-pages';
   let adminUrl: string | undefined;
-  if (pages) {
+  if (mode === 'github-pages') {
     const {VITE_SHOP_API_ORIGIN: origin} = loadEnv(mode, process.cwd(), 'VITE_');
     const api = origin ? new URL(origin) : undefined;
     if (!api || api.protocol !== 'https:' || api.origin !== origin) {
@@ -45,6 +47,12 @@ export default defineConfig(({mode}) => {
       },
     ],
     base: pages ? '/Magazin_OPT/' : '/',
-    build: {target: 'es2022'},
+    build: {
+      target: 'es2022',
+      rollupOptions: demo ? {input: [
+        fileURLToPath(new URL('index.html', import.meta.url)),
+        fileURLToPath(new URL('admin/index.html', import.meta.url)),
+      ]} : undefined,
+    },
   };
 });

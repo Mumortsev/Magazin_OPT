@@ -1,6 +1,6 @@
 import {lazy, Suspense, useEffect, useRef, useState, type FormEvent} from 'react';
 import {Check, Grid2X2, List, Package, Phone, Search, ShoppingBag, Trash2} from 'lucide-react';
-import {api, canOrder, money, packLimit, phoneHref, type Category, type Content, type Product} from './data';
+import {adminRoot, api, canOrder, demoMode, money, packLimit, phoneHref, type Category, type Content, type Product} from './data';
 import {CartProvider, useCart} from './cart';
 import {Breadcrumb, ConfirmDialog, Empty, Photo, ProductCard, Quantity} from './ui';
 
@@ -52,7 +52,7 @@ function Header({content}: {content?: Content}) {
 function Footer({content}: {content?: Content}) {
   return <footer className="footer"><div className="container footer-main">
     <div><a href="#/" className="brand">курортник.</a><p>Курортные товары оптом</p></div>
-    <div><h3>Покупателям</h3><a href="#/catalog">Каталог</a><a href="#/cart">Корзина</a><a href="#/conditions">Условия и доставка</a><a href={import.meta.env.BASE_URL + 'admin/'}>Для сотрудников</a></div>
+    <div><h3>Покупателям</h3><a href="#/catalog">Каталог</a><a href="#/cart">Корзина</a><a href="#/conditions">Условия и доставка</a><a href={adminRoot}>Для сотрудников</a></div>
     <div><h3>Информация</h3><a href="#/contacts">Контакты</a>{Object.entries(content?.pages ?? {}).map(([slug, page]) => <a key={slug} href={'#/info/' + slug}>{page.title}</a>)}</div>
     <div><h3>Связь с магазином</h3>{content?.phone && <a href={phoneHref(content.phone)}>{content.phone}</a>}{content?.email && <a href={'mailto:' + content.email}>{content.email}</a>}{content?.address && <p>{content.address}</p>}</div>
   </div></footer>;
@@ -168,7 +168,9 @@ function CartPage() {
     } catch (err) { setError((err as Error).message); }
     finally { submitting.current = false; setBusy(false); }
   }
-  if (number) return <div className="container info-page"><h1>Заявка отправлена</h1><p role="status">Заявка №{number} успешно отправлена. Наш менеджер свяжется с вами для подтверждения наличия, стоимости и условий доставки.</p><a className="button" href="#/catalog">Вернуться в каталог</a></div>;
+  if (number) return <div className="container info-page"><h1>{demoMode?'Тестовая заявка создана':'Заявка отправлена'}</h1>
+    <p role="status">{demoMode?`Заявка №${number} сохранена в этом браузере и видна в демо-админке.`:`Заявка №${number} успешно отправлена. Наш менеджер свяжется с вами для подтверждения наличия, стоимости и условий доставки.`}</p>
+    {demoMode&&<p><a href={adminRoot+'?order='+number} className="button secondary">Посмотреть в демо-админке</a></p>}<a className="button" href="#/catalog">Вернуться в каталог</a></div>;
   if (!lines.length) return <div className="container info-page"><Empty title="Корзина пуста" text="Добавьте товары из каталога."/></div>;
   return <div className="container cart-page"><Breadcrumb name="Корзина"/><h1>Корзина</h1>
     {!result?.data ? <Feedback error={result?.error}/> : <div className="cart-layout"><div className="live-cart-lines">
@@ -181,13 +183,15 @@ function CartPage() {
       <button className="button secondary" disabled={busy} onClick={()=>setConfirm(true)}>Очистить корзину</button>
     </div><form className="summary live-form" onSubmit={submit}>
       <h2>Оформление заявки</h2><p>Ориентировочная сумма <strong>{money(total)}</strong></p>
+      {demoMode ? <p>Проверка оформления пройдёт с тестовым покупателем. Вводить свои контакты не нужно.</p> : <>
       <label>Имя<input name="name" autoComplete="name" required maxLength={255}/></label>
       <label>Телефон<input name="phone" type="tel" autoComplete="tel" required maxLength={30}/></label>
       <label>Организация <small>(необязательно)</small><input name="organization" autoComplete="organization" maxLength={255}/></label>
       <label>Комментарий <small>(необязательно)</small><textarea name="comment" maxLength={2000}/></label>
+      </>}
       {invalid && <p role="alert">Проверьте количество упаковок и уберите недоступные товары.</p>}
       {error && <p role="alert" className="error-text">{error}</p>}
-      <button className="button" disabled={busy||invalid}>{busy ? 'Отправляем…' : 'Отправить заявку'}</button><p>Менеджер уточнит наличие, стоимость и доставку по телефону.</p>
+      <button className="button" disabled={busy||invalid}>{busy ? 'Сохраняем…' : demoMode ? 'Создать тестовую заявку' : 'Отправить заявку'}</button>{!demoMode&&<p>Менеджер уточнит наличие, стоимость и доставку по телефону.</p>}
     </form></div>}
     <ConfirmDialog open={confirm} onClose={()=>setConfirm(false)} onConfirm={clear}/>
   </div>;
@@ -217,7 +221,7 @@ function Site() {
     document.title = path === '/' ? content.title : `${content.pages[path.slice(6)]?.title ?? 'Оптовый магазин'} — Курортник`;
     document.querySelector('meta[name="description"]')?.setAttribute('content', content.description);
   }, [path,content]);
-  return <><a className="skip-link" href="#main" onClick={event=>{event.preventDefault();main.current?.focus();}}>Перейти к содержимому</a>
+  return <>{demoMode&&<div className="demo-banner">Демонстрация магазина. Тестовые товары и заявки сохраняются только в этом браузере.</div>}<a className="skip-link" href="#main" onClick={event=>{event.preventDefault();main.current?.focus();}}>Перейти к содержимому</a>
     <Header content={content}/><main id="main" ref={main} tabIndex={-1}>
       {path === '/cart' || path === '/checkout' ? <CartPage/> : path.startsWith('/product/') ? <ProductPage key={path} id={path.split('/')[2]}/> : !landing?.data ? <div className="container info-page"><Feedback error={landing?.error}/></div>
         : path === '/' ? <Home {...landing.data}/> : path === '/catalog' ? <Catalog key={route} query={new URLSearchParams(search)} categories={landing.data.categories}/> : <Info path={path} content={landing.data.content}/>}
@@ -225,6 +229,6 @@ function Site() {
 }
 
 export default function App() {
-  if (location.pathname === '/admin' || location.pathname.startsWith('/admin/')) return <Suspense fallback={<p role="status">Загрузка админки…</p>}><Admin/></Suspense>;
+  if (location.pathname.replace(/\/$/, '') === adminRoot.replace(/\/$/, '') || (!demoMode && location.pathname.startsWith('/admin/'))) return <Suspense fallback={<p role="status">Загрузка админки…</p>}><Admin/></Suspense>;
   return <CartProvider><Site/></CartProvider>;
 }

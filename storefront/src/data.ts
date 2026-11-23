@@ -46,6 +46,8 @@ export const money = (amount: number) =>
 export const canOrder = (product: Product) => product.available === null || product.available >= product.minimum;
 export const packLimit = (product: Product) => Math.min(product.available ?? 100000, 100000);
 export const phoneHref = (phone: string) => 'tel:' + phone.replace(/[^+\d]/g, '');
+export const demoMode = import.meta.env.MODE === 'github-pages-demo';
+export const adminRoot = import.meta.env.BASE_URL === '/' ? '/admin' : import.meta.env.BASE_URL + 'admin/';
 export const publicApiOrigin = import.meta.env.VITE_SHOP_API_ORIGIN?.replace(/\/$/, '') ?? '';
 
 export function storefrontImage(src: string): string {
@@ -58,6 +60,7 @@ let csrf = '';
 export function setCsrf(value: string) { csrf = value; }
 
 export async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
+  if (demoMode) return await (await import('./demo')).demoApi(path, options) as T;
   const headers = new Headers(options.headers);
   if (options.body && !(options.body instanceof FormData)) headers.set('Content-Type', 'application/json');
   if (csrf && options.method && options.method !== 'GET') headers.set('X-CSRF-Token', csrf);

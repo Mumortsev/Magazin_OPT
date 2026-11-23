@@ -3,6 +3,11 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      live:
+        description: Publish with the production API
+        type: boolean
+        default: false
 permissions:
   contents: read
   pages: write
@@ -31,6 +36,7 @@ jobs:
           cache-dependency-path: storefront/pnpm-lock.yaml
       - run: pnpm install --frozen-lockfile
       - name: Verify public API before replacing Pages
+        if: ${{ inputs.live == true }}
         run: |
           node --input-type=module <<'JS'
           import assert from 'node:assert/strict';
@@ -58,6 +64,9 @@ jobs:
           assert.equal(session.status, 401, 'The admin session endpoint must require authentication.');
           JS
       - run: pnpm build --mode github-pages
+        if: ${{ inputs.live == true }}
+      - run: pnpm build --mode github-pages-demo
+        if: ${{ inputs.live != true }}
       - run: rm -f dist/push-sw.js
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3

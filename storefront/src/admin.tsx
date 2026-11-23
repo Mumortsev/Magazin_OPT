@@ -1,6 +1,6 @@
 import {useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode} from 'react';
 import {BarChart3, Bell, ClipboardList, FileSpreadsheet, FolderTree, LayoutTemplate, LogOut, Package, Phone} from 'lucide-react';
-import {api, money, phoneHref, setCsrf, type Content} from './data';
+import {adminRoot, api, demoMode, money, phoneHref, setCsrf, type Content} from './data';
 import './admin.css';
 
 type Staff = {id:number; name:string; role:'admin'|'manager'; csrf:string};
@@ -73,7 +73,7 @@ function Login({onLogin}:{onLogin:(staff:Staff)=>void}) {
     event.preventDefault();const data=Object.fromEntries(new FormData(event.currentTarget));
     void action.run(async()=>onLogin(await write<Staff>('/login','POST',data)));
   }
-  return <main className="admin-login"><a href="/">Курортник</a><h1>Вход для сотрудников</h1><form className="admin-form" onSubmit={submit}>
+  return <main className="admin-login"><a href={import.meta.env.BASE_URL}>Курортник</a><h1>Вход для сотрудников</h1>{demoMode&&<p>Демо-доступ <strong>admin / admin</strong>. Здесь используются тестовые данные.</p>}<form className="admin-form" onSubmit={submit}>
     <Field name="login" label="Логин" required autoComplete="username"/><Field name="password" label="Пароль" type="password" required autoComplete="current-password"/>
     {action.feedback}<button className="button" disabled={action.busy}>Войти</button>
   </form></main>;
@@ -83,18 +83,26 @@ function Field({label,...props}:React.ComponentProps<'input'>&{label:string}) {
   return <label>{label}<input {...props}/></label>;
 }
 
+function selectedOrder() {
+  if (demoMode) return Number(new URLSearchParams(location.search).get('order')) || null;
+  const match = location.pathname.match(/^\/admin\/orders\/(\d+)\/?$/);
+  return match ? Number(match[1]) : null;
+}
+
 function Orders({staff,revision,refresh}:{staff:Staff;revision:number;refresh:()=>void}) {
   const [filter,setFilter]=useState('');
   const [page,setPage]=useState(1);
-  const orderMatch=location.pathname.match(/^\/admin\/orders\/(\d+)\/?$/);
-  const [id,setId]=useState<number|null>(orderMatch ? Number(orderMatch[1]) : null);
+  const [id,setId]=useState(selectedOrder);
   const result=useQuery<{items:Order[];total:number}>(`/orders?status=${filter}&page=${page}`,revision);
   useEffect(()=>{
-    const change=()=>{const match=location.pathname.match(/^\/admin\/orders\/(\d+)\/?$/);setId(match ? Number(match[1]) : null);};
+    const change=()=>setId(selectedOrder());
     window.addEventListener('popstate',change);
     return ()=>window.removeEventListener('popstate',change);
   },[]);
-  function select(orderId:number|null){history.pushState(null,'',orderId ? `/admin/orders/${orderId}` : '/admin');setId(orderId);}
+  function select(orderId:number|null){
+    const path=orderId ? (demoMode ? adminRoot+'?order='+orderId : `/admin/orders/${orderId}`) : adminRoot;
+    history.pushState(null,'',path);setId(orderId);
+  }
   if(id)return <OrderDetail key={id} id={id} staff={staff} revision={revision} refresh={refresh} close={()=>select(null)}/>;
   return <><h1>Заявки</h1><label className="admin-inline">Статус<select value={filter} onChange={event=>{setFilter(event.target.value);setPage(1);}}><option value="">Все</option>{Object.entries(statuses).filter(([key])=>key!=='rejected').map(([key,value])=><option key={key} value={key}>{value}</option>)}</select></label>
     {result.error ? <p role="alert">{result.error}</p> : !result.data ? <p role="status">Загрузка…</p> : <div className="admin-cards">{result.data.items.length===0&&<p>Заявок нет.</p>}{result.data.items.map(order=><button key={order.id} className="admin-order" onClick={()=>select(order.id)}>
@@ -118,7 +126,7 @@ function OrderDetail({id,staff,revision,refresh,close}:{id:number;staff:Staff;re
   return <><button className="button secondary" onClick={close}>Все заявки</button><h1>Заявка №{id}</h1>
     {!order ? <p role={result.error?'alert':'status'}>{result.error||'Загрузка…'}</p> : <>
       <p><strong>{statuses[order.status]??order.status}</strong> · {date(order.created_at)} · {order.manager??'Ответственный не назначен'}</p>
-      <div className="admin-panel"><h2>{order.name}</h2><a className="button secondary" href={phoneHref(order.phone)}><Phone size={18}/> {order.phone}</a>
+      <div className="admin-panel"><h2>{order.name}</h2>{demoMode ? <p>{order.phone} · тестовый номер</p> : <a className="button secondary" href={phoneHref(order.phone)}><Phone size={18}/> {order.phone}</a>}
         {order.organization&&<p>{order.organization}</p>}{order.comment&&<p className="long-text">{order.comment}</p>}
         <ul className="admin-items">{order.items.map(item=><li key={item.id}>{item.photo&&<img src={item.photo} alt="" loading="lazy"/>}<span><strong>{item.name}</strong>{item.sku&&' · '+item.sku}<br/>{item.packs} уп. · {item.pieces} шт. · {money(item.price)} за шт.</span><strong>{money(item.subtotal)}</strong></li>)}</ul>
         <p>Сумма заявки <strong>{money(order.total)}</strong></p>
@@ -263,6 +271,10 @@ function Import() {
     </div>}</>;
 }
 
+function DemoImport() {
+  return <><h1>Импорт товаров</h1><p>В рабочем магазине этот раздел проверяет таблицу Excel и показывает, какие товары будут добавлены или изменены. В демонстрации каталог можно редактировать через раздел «Товары».</p></>;
+}
+
 function ContentAdmin() {
   const {data,error}=useQuery<Content>('/content');
   return <><h1>Содержимое сайта</h1>{data ? <ContentEditor content={data}/> : <p role={error?'alert':'status'}>{error||'Загрузка…'}</p>}</>;
@@ -346,6 +358,14 @@ export default function Admin() {
   },[]);
   useEffect(()=>{
     if(!staff)return;
+    if(demoMode){
+      let active=true;
+      const changed=()=>{void import('./demo').then(({newDemoOrders})=>{if(active){setCount(newDemoOrders());refresh();}});};
+      changed();
+      window.addEventListener('storage',changed);
+      window.addEventListener('kurortnik-demo-change',changed);
+      return ()=>{active=false;window.removeEventListener('storage',changed);window.removeEventListener('kurortnik-demo-change',changed);};
+    }
     const events=new EventSource('/api/v1/admin/events');
     events.onopen=()=>setOnline(true);
     events.onerror=()=>{setOnline(false);void api('/admin/session').catch(()=>{setCsrf('');setStaff(null);});};
@@ -359,18 +379,19 @@ export default function Admin() {
   function navigate(target:string,category?:number) {
     const query=target==='orders'?'':`?section=${target}${category?'&category='+category:''}`;
     // A document navigation lets beforeunload protect any active editor.
-    if(target===screen&&location.pathname==='/admin'&&location.search===query){select(target);return;}
-    location.assign('/admin'+query);
+    if(target===screen&&location.pathname===adminRoot&&location.search===query){select(target);return;}
+    location.assign(adminRoot+query);
   }
   const panels:Record<string,ReactNode>={
     orders:<Orders staff={staff} revision={revision} refresh={refresh}/>,
     products:<CatalogAdmin onProducts={id=>navigate('products',id)}/>,
     categories:<CatalogAdmin categories onProducts={id=>navigate('products',id)}/>,
-    analytics:<Analytics revision={revision}/>,import:<Import/>,content:<ContentAdmin/>,notifications:<Notifications staff={staff}/>,
+    analytics:<Analytics revision={revision}/>,import:demoMode?<DemoImport/>:<Import/>,content:<ContentAdmin/>,
+    notifications:demoMode?<><h1>Уведомления</h1><p>Сводка заявок обновляется в этом браузере. Web Push и почта доступны после подключения сервера.</p></>:<Notifications staff={staff}/>,
   };
-  return <div className="admin-shell"><aside className="admin-sidebar"><a href="/" className="admin-brand">Курортник</a><p>{staff.name}</p>
+  return <div className="admin-shell"><aside className="admin-sidebar"><a href={import.meta.env.BASE_URL} className="admin-brand">Курортник</a><p>{staff.name}</p>
     <nav aria-label="Разделы админки">{available.map(([key,label,Icon])=><button key={key} aria-current={screen===key?'page':undefined} onClick={()=>navigate(key)}><Icon size={20}/>{label}{key==='orders'&&count>0&&<strong>{count}</strong>}</button>)}</nav>
     <button className="button secondary" disabled={action.busy} onClick={()=>{if(window.dispatchEvent(new Event('kurortnik:leave-editor',{cancelable:true})))void action.run(async()=>{await write('/logout','POST');setCsrf('');setStaff(null);});}}><LogOut size={18}/> Выйти</button>
-    {action.feedback}<p role="status">{online?'Связь с сервером':'Подключение к обновлениям…'}</p>
+    {action.feedback}<p role="status">{demoMode?'Демонстрация · данные в этом браузере':online?'Связь с сервером':'Подключение к обновлениям…'}</p>
   </aside><main className="admin-main">{panels[screen]}</main></div>;
 }
