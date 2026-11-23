@@ -67,3 +67,9 @@ uvicorn api.web.app:app --host 127.0.0.1 --port 8019
 3. Запустите workflow `Publish wholesale storefront to Pages` после согласования публикации. Он соберёт витрину с путями `/Magazin_OPT/` и адресом API. Отдельную локальную сборку Pages можно проверить командой `VITE_SHOP_API_ORIGIN=https://api.example.org pnpm build --mode github-pages`.
 
 На момент проверки прежний адрес Amvera возвращал HTTP 503. Текущая публикация Pages по-прежнему показывает исходную демоверсию.
+
+### Ссылка на админку и тестовый вход
+
+После публикации сотрудник может открыть https://mumortsev.github.io/Magazin_OPT/admin/. Страница Pages переводит браузер на `/admin` HTTPS-сервера FastAPI, где выполняется вход. Там хранятся сессии и доступны заявки.
+
+Для проверки на **отдельной локальной базе** после команды `migrate` выполните `export SHOP_LOCAL_ADMIN=true` и `python -m api.web.manage add-local-admin`. Команда создаёт администратора `admin` с паролем `admin` и сохраняет хеш Argon2. Существующая запись с таким логином сохраняется. С той же переменной запустите FastAPI на `127.0.0.1` и откройте http://127.0.0.1:8019/admin/. Для публичного сервера используйте `python -m api.web.manage add-staff admin 'Администратор' admin` и задайте пароль через терминал. Пара `admin` / `admin` отключена на HTTPS и при запросах извне локальной машины.

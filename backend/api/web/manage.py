@@ -4,13 +4,14 @@ import asyncio
 from datetime import datetime
 from getpass import getpass
 import re
+from types import SimpleNamespace
 
 from sqlalchemy import delete, inspect, select, text
 
 from .. import models as legacy_models  # Register shared ORM tables.
 from ..database import AsyncSessionLocal, Base, engine
 from . import models
-from .security import PASSWORDS, begin_write
+from .security import LOCAL_ADMIN, LOCAL_ADMIN_PASSWORD, PASSWORDS, begin_write
 
 
 async def migrate():
@@ -63,6 +64,7 @@ def main():
     commands = parser.add_subparsers(dest="action",required=True)
     commands.add_parser("migrate")
     commands.add_parser("cleanup")
+    commands.add_parser("add-local-admin")
     add = commands.add_parser("add-staff")
     add.add_argument("login")
     add.add_argument("name")
@@ -74,6 +76,11 @@ def main():
         asyncio.run(migrate())
     elif args.action == "cleanup":
         asyncio.run(cleanup())
+    elif args.action == "add-local-admin":
+        if not LOCAL_ADMIN:
+            parser.error("Для тестового входа включите SHOP_LOCAL_ADMIN=true и укажите локальный HTTP-адрес в SHOP_ORIGIN")
+        details = SimpleNamespace(login="admin", name="Администратор", role="admin", email=None)
+        asyncio.run(create_staff(details, LOCAL_ADMIN_PASSWORD))
     elif args.action == "disable-staff":
         asyncio.run(disable(args.login))
     else:

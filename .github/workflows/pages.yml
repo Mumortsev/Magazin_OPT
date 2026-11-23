@@ -52,6 +52,10 @@ jobs:
           });
           assert(preflight.ok, 'The order API preflight was rejected, HTTP ' + preflight.status);
           assert.equal(preflight.headers.get('access-control-allow-origin'), pages);
+          const admin = await fetch(origin + '/admin', {redirect: 'error', signal: AbortSignal.timeout(15000)});
+          assert(admin.ok && admin.headers.get('content-type')?.includes('text/html'), 'The admin interface is unavailable.');
+          const session = await fetch(origin + '/api/v1/admin/session', {redirect: 'error', signal: AbortSignal.timeout(15000)});
+          assert.equal(session.status, 401, 'The admin session endpoint must require authentication.');
           JS
       - run: pnpm build --mode github-pages
       - run: rm -f dist/push-sw.js

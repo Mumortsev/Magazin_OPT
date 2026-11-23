@@ -23,6 +23,13 @@ PASSWORDS = PasswordHasher()
 DUMMY_HASH = PASSWORDS.hash(secrets.token_urlsafe(32))
 ORIGIN = os.environ.get("SHOP_ORIGIN", "http://localhost:8000").rstrip("/")
 HTTPS = urlsplit(ORIGIN).scheme == "https"
+LOOPBACK = {"localhost", "127.0.0.1", "::1"}
+LOCAL_ADMIN = (
+    urlsplit(ORIGIN).scheme == "http"
+    and urlsplit(ORIGIN).hostname in LOOPBACK
+    and os.getenv("SHOP_LOCAL_ADMIN", "").lower() == "true"
+)
+LOCAL_ADMIN_PASSWORD = "admin"
 COOKIE = "__Host-kurortnik_staff" if HTTPS else "kurortnik_staff"
 
 
@@ -111,7 +118,13 @@ async def login(values: Credentials, request: Request, response: Response, db: A
     await limit(request, "login-ip", 20, 900)
     await limit(request, "login-account", 8, 900, normalized or "empty")
     staff = await db.scalar(select(Staff).where(Staff.login == normalized, Staff.active.is_(True)))
-    if not await run_in_threadpool(verify_password, staff.password if staff else DUMMY_HASH, values.password) or staff is None:
+    password_valid = await run_in_threadpool(verify_password, staff.password if staff else DUMMY_HASH, values.password)
+    local_admin_blocked = (
+        normalized == "admin"
+        and values.password == LOCAL_ADMIN_PASSWORD
+        and not (LOCAL_ADMIN and request.client and request.client.host in LOOPBACK)
+    )
+    if not password_valid or staff is None or local_admin_blocked:
         raise HTTPException(401, "Неверный логин или пароль")
     token = secrets.token_urlsafe(32)
     previous = await read_session(db, request.cookies.get(COOKIE, ""))

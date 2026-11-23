@@ -1,6 +1,6 @@
 import {lazy, Suspense, useEffect, useRef, useState, type FormEvent} from 'react';
 import {Check, Grid2X2, List, Package, Phone, Search, ShoppingBag, Trash2} from 'lucide-react';
-import {api, canOrder, money, packLimit, phoneHref, publicApiOrigin, type Category, type Content, type Product} from './data';
+import {api, canOrder, money, packLimit, phoneHref, type Category, type Content, type Product} from './data';
 import {CartProvider, useCart} from './cart';
 import {Breadcrumb, ConfirmDialog, Empty, Photo, ProductCard, Quantity} from './ui';
 
@@ -52,7 +52,7 @@ function Header({content}: {content?: Content}) {
 function Footer({content}: {content?: Content}) {
   return <footer className="footer"><div className="container footer-main">
     <div><a href="#/" className="brand">курортник.</a><p>Курортные товары оптом</p></div>
-    <div><h3>Покупателям</h3><a href="#/catalog">Каталог</a><a href="#/cart">Корзина</a><a href="#/conditions">Условия и доставка</a><a href={publicApiOrigin + '/admin'}>Для сотрудников</a></div>
+    <div><h3>Покупателям</h3><a href="#/catalog">Каталог</a><a href="#/cart">Корзина</a><a href="#/conditions">Условия и доставка</a><a href={import.meta.env.BASE_URL + 'admin/'}>Для сотрудников</a></div>
     <div><h3>Информация</h3><a href="#/contacts">Контакты</a>{Object.entries(content?.pages ?? {}).map(([slug, page]) => <a key={slug} href={'#/info/' + slug}>{page.title}</a>)}</div>
     <div><h3>Связь с магазином</h3>{content?.phone && <a href={phoneHref(content.phone)}>{content.phone}</a>}{content?.email && <a href={'mailto:' + content.email}>{content.email}</a>}{content?.address && <p>{content.address}</p>}</div>
   </div></footer>;
