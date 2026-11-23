@@ -62,6 +62,13 @@ function Feedback({error}: {error?: string}) {
   return error ? <p role="alert" className="error-text">{error}</p> : <p role="status">Загрузка…</p>;
 }
 
+function CategoryTile({name, image, href}: {name: string; image: string | null; href: string}) {
+  return <a className="category-tile" href={href}>
+    <Photo src={image} alt=""/>
+    <div><h3>{name}</h3></div>
+  </a>;
+}
+
 function Home({content, categories}: {content: Content; categories: Category[]}) {
   const groups = useData<{featured: Product[]; offers: Product[]; newest: Product[]}>('/shop/highlights');
   return <>
@@ -73,7 +80,7 @@ function Home({content, categories}: {content: Content; categories: Category[]})
       <div className="live-hero-image"><Photo src={content.banner_image} alt="Курортный ассортимент" eager/></div>
     </section>
     <section className="container section"><h2>Категории товаров</h2><div className="categories">
-      {categories.map(category => <a key={category.id} className="category-tile" href={`#/catalog?category=${category.id}`}><Photo src={category.image} alt={category.name}/><div><h3>{category.name}</h3></div></a>)}
+      {categories.map(category => <CategoryTile key={category.id} name={category.name} image={category.image} href={`#/catalog?category=${category.id}`}/>)}
     </div></section>
     {groups?.data ? ([['Популярные товары', groups.data.featured], ['Новинки', groups.data.newest], ['Специальные предложения', groups.data.offers]] as const)
       .filter(([, products]) => products.length)
@@ -86,6 +93,21 @@ function Home({content, categories}: {content: Content; categories: Category[]})
 }
 
 function Catalog({query, categories}: {query: URLSearchParams; categories: Category[]}) {
+  if (query.get('all') === '1' || query.get('category') || query.get('q')?.trim() || query.get('new') === '1') {
+    return <CatalogProducts query={query} categories={categories}/>;
+  }
+
+  return <div className="container catalog-page">
+    <Breadcrumb name="Каталог"/>
+    <h1>Каталог товаров</h1>
+    <nav className="categories catalog-categories" aria-label="Категории каталога">
+      <CategoryTile name="Все товары" image="/images/hero.webp" href="#/catalog?all=1"/>
+      {categories.map(category => <CategoryTile key={category.id} name={category.name} image={category.image} href={`#/catalog?category=${category.id}`}/>)}
+    </nav>
+  </div>;
+}
+
+function CatalogProducts({query, categories}: {query: URLSearchParams; categories: Category[]}) {
   const [draft, setDraft] = useState(query.get('q') ?? '');
   const [search, setSearch] = useState(draft);
   const [category, setCategory] = useState(query.get('category') ?? '');
@@ -99,9 +121,11 @@ function Catalog({query, categories}: {query: URLSearchParams; categories: Categ
   const filters = new URLSearchParams({q:search, category, subcategory, sort, stock, country, newest:String(newOnly), page:String(page)});
   for (const key of ['category', 'subcategory']) if (!filters.get(key)) filters.delete(key);
   const result = useData<ProductPageData>('/shop/products?' + filters);
-  const children = categories.find(item => String(item.id) === category)?.subcategories ?? [];
+  const selectedCategory = categories.find(item => String(item.id) === category);
+  const children = selectedCategory?.subcategories ?? [];
+  const title = selectedCategory?.name ?? (search ? 'Результаты поиска' : newOnly ? 'Новинки' : 'Все товары');
 
-  return <div className="container catalog-page"><Breadcrumb name="Каталог"/><h1>Каталог товаров</h1>
+  return <div className="container catalog-page"><Breadcrumb name={title} parent="Каталог"/><h1>{title}</h1>
     <form className="catalog-search search-field" onSubmit={event => { event.preventDefault(); setSearch(draft.trim()); setPage(1); }}>
       <Search size={24}/><input type="search" aria-label="Поиск по названию или артикулу" placeholder="Название или артикул" value={draft} onChange={event => setDraft(event.target.value)}/><button className="button">Найти</button>
     </form>
