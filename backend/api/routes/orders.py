@@ -2,12 +2,13 @@ from typing import Optional
 import os
 import json
 import logging
-from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks
+from fastapi import Request, APIRouter, Depends, HTTPException, Query, BackgroundTasks
 from sqlalchemy import select, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from pywebpush import webpush, WebPushException
 
+from ..web import legacy
 from ..database import get_db, AsyncSessionLocal
 from ..models import Product, Order, OrderItem, PushSubscription
 from ..schemas import (
@@ -149,12 +150,28 @@ async def validate_cart(
 async def create_order(
     order_data: OrderCreate,
     background_tasks: BackgroundTasks,
+    request: Request,
     db: AsyncSession = Depends(get_db)
 ):
     """
     Create a new order.
     Validates all items and calculates totals.
     """
+    if legacy.SHARED:
+        from ..web.security import begin_write, limit
+        from ..web.orders import normalize_phone
+        await limit(request,"miniapp-orders",30,600)
+        if not order_data.items or len(order_data.items)>100 or len({item.product_id for item in order_data.items}) != len(order_data.items):
+            raise HTTPException(422,"Проверьте количество и состав позиций")
+        if not 10 <= len(normalize_phone(order_data.customer_phone)) <= 15 or any(item.quantity_packs>100000 for item in order_data.items):
+            raise HTTPException(422,"Проверьте телефон и число упаковок")
+        identity = legacy.telegram_id(request)
+        wa = order_data.whatsapp_phone if legacy.whatsapp_identity(request,order_data.whatsapp_phone) else None
+        order_data.telegram_user_id = identity
+        order_data.whatsapp_phone = wa
+        order_data.platform = "telegram" if identity else "whatsapp" if wa else "legacy-web"
+        await begin_write(db)
+
     # Filter active and skipped items
     active_items = []
     skipped_items = []
@@ -234,6 +251,10 @@ async def create_order(
         if product.in_stock is not None:
             product.in_stock -= item.quantity_packs
     
+    if legacy.SHARED:
+        from ..web.orders import enqueue, record
+        record(db, db_order, "Mini App", "created")
+        await enqueue(db, db_order)
     await db.commit()
     
     # Fetch complete order with items
@@ -322,7 +343,7 @@ async def get_my_orders(
     if whatsapp_phone:
         # WhatsApp Mode
         from .whatsapp import verify_phone_token
-        if not token or not verify_phone_token(whatsapp_phone, token):
+        if (legacy.SHARED and len(os.getenv("WHATSAPP_VERIFY_TOKEN","")) < 32) or not token or not verify_phone_token(whatsapp_phone, token):
             raise HTTPException(status_code=403, detail="Доступ запрещен: недействительный токен")
         
         cleaned_wa = clean_phone_str(whatsapp_phone)
@@ -366,6 +387,13 @@ async def get_my_orders(
             if o_tg_match or o_phone_match:
                 orders.append(o)
     
+    if legacy.SHARED:
+        if whatsapp_phone:
+            orders = [o for o in orders if o.whatsapp_phone and clean_phone_str(o.whatsapp_phone)==cleaned_wa]
+        else:
+            orders = [o for o in orders if o.telegram_user_id==telegram_user_id]
+        orders = [o for o in orders if o.platform!="web"]
+
     order_responses = []
     for order in orders:
         order_resp = OrderResponse(
@@ -427,7 +455,10 @@ async def update_order_status(
     db: AsyncSession = Depends(get_db)
 ):
     """Update order status and optionally manager (admin only)."""
-    valid_statuses = ["new", "processing", "shipped", "cancelled", "completed"]
+    valid_statuses = ["new", "processing", "shipped", "cancelled", "completed", "accepted", "rejected"]
+    if legacy.SHARED:
+        from ..web.security import begin_write
+        await begin_write(db)
     if status not in valid_statuses:
         raise HTTPException(status_code=400, detail=f"Неверный статус. Допустимые: {', '.join(valid_statuses)}")
     
@@ -437,11 +468,19 @@ async def update_order_status(
     if not order:
         raise HTTPException(status_code=404, detail="Заказ не найден")
     
+    if legacy.SHARED:
+        from ..web.models import Assignment
+        assignment = await db.get(Assignment,order_id)
+        if order.platform=="web" or assignment and (assignment.archived or assignment.staff_id):
+            raise HTTPException(409,"Заявка обрабатывается в веб-админке")
     old_status = order.status
     order.status = status
     if manager is not None:
         order.assigned_manager = None if manager == "" else manager
 
+    if legacy.SHARED and old_status != status:
+        from ..web.orders import record
+        record(db,order,"Telegram-бот","update")
     await db.commit()
     
     # Dispatch web push if status changed
@@ -494,6 +533,8 @@ async def delete_order(order_id: int, db: AsyncSession = Depends(get_db)):
     if not order:
         raise HTTPException(status_code=404, detail="Заказ не найден")
         
+    if legacy.SHARED:
+        raise HTTPException(403,"Архивируйте заявку в веб-админке")
     await db.delete(order)
     await db.commit()
     

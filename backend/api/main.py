@@ -9,6 +9,7 @@ from dotenv import load_dotenv
 
 from .database import init_db
 from .routes import categories, products, orders, images, admin, whatsapp, auth
+from .web import legacy
 
 load_dotenv()
 
@@ -58,6 +59,16 @@ WEBAPP_URL = os.getenv("WEBAPP_URL", "*")
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Initialize database on startup."""
+    if legacy.SHARED:
+        legacy.validate_environment()
+        # The versioned storefront manages schema before either process starts.
+        from .database import AsyncSessionLocal
+        from .web.models import Staff
+        from sqlalchemy import select
+        async with AsyncSessionLocal() as db:
+            await db.execute(select(Staff.id).limit(1))
+        yield
+        return
     await init_db()
     
     try:
@@ -98,13 +109,17 @@ app = FastAPI(
 # Telegram WebApp on Android sometimes sends strict Origin headers (e.g. tgwebapp:// or null)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], # Force allow all for Mini App
+    allow_origins=[WEBAPP_URL] if legacy.SHARED and WEBAPP_URL != "*" else ([] if legacy.SHARED else ["*"]),
     allow_credentials=True, # Note: allow_credentials=True with allow_origins=["*"] is restricted in some FastAPI versions, but usually works if set correctly. If it fails, we set allow_origin_regex=".*"
-    allow_origin_regex=".*", # Catch-all for tgwebapp:// and https://web.telegram.org
+    allow_origin_regex=None if legacy.SHARED else ".*", # Catch-all for tgwebapp:// and https://web.telegram.org
     allow_methods=["*"],
     allow_headers=["*"],
     expose_headers=["*"]
 )
+if legacy.SHARED:
+    app.middleware("http")(legacy.gate)
+
+
 @app.middleware("http")
 async def add_no_cache_header(request, call_next):
     response = await call_next(request)
@@ -226,13 +241,19 @@ os.makedirs(static_dir, exist_ok=True)
 os.makedirs(uploads_dir, exist_ok=True)
 print(f"Active Static Directory: {static_dir}")
 
+if legacy.SHARED:
+    from .web.catalog import MEDIA
+    MEDIA.mkdir(parents=True, exist_ok=True)
+    app.mount("/uploads", StaticFiles(directory=MEDIA), name="shared_media")
+
 app.mount("/static", StaticFiles(directory=str(static_dir)), name="static_assets") 
 
 # In Docker, mount persistent uploads from /data/uploads
 if os.path.exists("/data"):
     persistent_uploads = Path("/data/uploads")
     os.makedirs(persistent_uploads, exist_ok=True)
-    app.mount("/uploads", StaticFiles(directory=str(persistent_uploads)), name="persistent_uploads")
+    if not legacy.SHARED:
+        app.mount("/uploads", StaticFiles(directory=str(persistent_uploads)), name="persistent_uploads")
     print(f"Persistent Uploads mounted from: {persistent_uploads}") 
 
     persistent_pdfs = Path("/data/static/pdfs")

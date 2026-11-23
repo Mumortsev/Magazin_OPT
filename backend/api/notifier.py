@@ -121,6 +121,14 @@ async def notify_new_order(order_data: dict, items: List[dict]):
             webapp_url = os.getenv("WEBAPP_URL", "http://localhost:3000")
             pdf_filename = f"order_{order_data.get('id')}.pdf"
             public_pdf_url = f"{webapp_url}/static/pdfs/{pdf_filename}"
+            from .web.legacy import SHARED, receipt_signature
+            if SHARED:
+                from time import time
+                expires = int(time()) + 3600
+                number = order_data["id"]
+                signature = receipt_signature(number, expires)
+                public_pdf_url = f"{webapp_url}/api/whatsapp/receipt/{number}?expires={expires}&signature={signature}"
+
             
             # Format product list without HTML tags for WhatsApp
             items_text_wa = items_text.replace("<b>", "*").replace("</b>", "*").replace("<i>", "_").replace("</i>", "_")

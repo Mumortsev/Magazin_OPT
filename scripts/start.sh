@@ -15,7 +15,7 @@ fi
 
 # Ensure database is initialized in the persistent volume
 # Check if we are using sqlite (default)
-if [[ "$DATABASE_URL" == *"sqlite"* ]]; then
+if [[ "$DATABASE_URL" == *"sqlite"* && "${SHOP_SHARED_LEGACY,,}" != "true" ]]; then
     echo "Ensuring /data directory exists..."
     mkdir -p /data
     

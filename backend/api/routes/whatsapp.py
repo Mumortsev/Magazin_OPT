@@ -8,7 +8,7 @@ import hashlib
 import logging
 from typing import Optional
 from fastapi import APIRouter, Query, Request, Response, Depends, BackgroundTasks
-from fastapi.responses import PlainTextResponse
+from fastapi.responses import FileResponse, PlainTextResponse
 import httpx
 
 from ..whatsapp_service import whatsapp_service
@@ -25,6 +25,16 @@ def verify_phone_token(phone: str, token: str) -> bool:
     """Verify if the token matches the phone number."""
     expected_token = generate_phone_token(phone)
     return hmac.compare_digest(expected_token, token)
+
+@router.get("/receipt/{order_id}")
+async def receipt(order_id: int, expires: int, signature: str):
+    from ..pdf_generator import STATIC_PDF_DIR
+    from ..web.legacy import receipt_is_valid
+    path = STATIC_PDF_DIR / f"order_{order_id}.pdf"
+    if not receipt_is_valid(order_id, expires, signature) or not path.is_file():
+        return Response(status_code=404)
+    return FileResponse(path, media_type="application/pdf", headers={"Cache-Control":"no-store","Referrer-Policy":"no-referrer"})
+
 
 @router.get("/webhook", response_class=PlainTextResponse)
 async def verify_webhook(

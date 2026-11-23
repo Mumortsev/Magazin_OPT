@@ -12,6 +12,17 @@ logger = logging.getLogger(__name__)
 SUPPORTED_EXTENSIONS = {'.xlsx', '.xls', '.xlsm', '.xlsb', '.ods', '.csv', '.tsv'}
 
 
+COLUMN_ALIASES = {
+    'category': ['категория', 'группа'],
+    'subcategory': ['подкатегория', 'подгруппа'],
+    'name': ['наименование', 'название', 'товар', 'имя', 'продукт'],
+    'article': ['артикул', 'sku', 'код', 'штрихкод'],
+    'price': ['цена (за 1 шт/₽)', 'цена', 'стоимость', 'прайс', 'цена/шт'],
+    'pack_size': ['кол-во в пачке (шт)', 'кол-во в пачке', 'кол-во в упаковке', 'в пачке', 'штук в упаковке', 'шт/уп', 'упаковка'],
+    'desc': ['описание', 'информация', 'детали', 'заметки']
+}
+
+
 def read_spreadsheet(file_path: str) -> pd.DataFrame:
     """
     Читает файл таблицы любого поддерживаемого формата.
@@ -96,20 +107,12 @@ async def process_excel_import(file_path: str):
         df.columns = [str(c).strip().lower() for c in df.columns]
 
         # Синонимы колонок
-        aliases = {
-            'category': ['категория', 'группа'],
-            'subcategory': ['подкатегория', 'подгруппа'],
-            'name': ['наименование', 'название', 'товар', 'имя', 'продукт'],
-            'article': ['артикул', 'sku', 'код', 'штрихкод'],
-            'price': ['цена (за 1 шт/₽)', 'цена', 'стоимость', 'прайс', 'цена/шт'],
-            'pack_size': ['кол-во в пачке (шт)', 'кол-во в пачке', 'кол-во в упаковке', 'в пачке', 'штук в упаковке', 'шт/уп', 'упаковка'],
-            'desc': ['описание', 'информация', 'детали', 'заметки']
-        }
+
 
         # Определяем, какие колонки реально существуют в загруженном файле
         from typing import Optional, Any, List, Dict
         actual_cols: Dict[str, Any] = {} 
-        for key, possible_names in aliases.items():
+        for key, possible_names in COLUMN_ALIASES.items():
             actual_cols[key] = None
             for col in df.columns:
                 if col in possible_names:

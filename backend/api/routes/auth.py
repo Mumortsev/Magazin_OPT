@@ -7,6 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import BaseModel
 
+from ..web.legacy import SHARED
 from ..database import get_db
 from ..models import PushSubscription
 
@@ -52,6 +53,10 @@ async def register_push(
     """
     Register or update a browser Web Push subscription for a user's phone number.
     """
+    if SHARED:
+        from ..web.notifications import safe_endpoint, key_bytes
+        if payload.phone.startswith("admin_") or not safe_endpoint(payload.endpoint) or not key_bytes(payload.keys.p256dh,65) or not key_bytes(payload.keys.auth,16):
+            raise HTTPException(422, "Некорректная подписка")
     cleaned_phone = clean_phone_number(payload.phone)
     if not cleaned_phone:
         raise HTTPException(

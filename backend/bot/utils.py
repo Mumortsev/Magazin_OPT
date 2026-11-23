@@ -26,7 +26,9 @@ async def api_request(
     """Make a request to the API."""
     url = f"{API_URL}{endpoint}"
     
-    async with httpx.AsyncClient(timeout=30.0) as client:
+    key = os.getenv("SHOP_LEGACY_BOT_KEY")
+    headers = {"X-Shop-Bot-Key":key} if key else {}
+    async with httpx.AsyncClient(timeout=30.0, headers=headers) as client:
         if method == "GET":
             response = await client.get(url, params=params)
         elif method == "POST":

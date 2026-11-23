@@ -13,11 +13,11 @@ const API = {
 
         try {
             const response = await fetch(url, {
+                ...options,
                 headers: {
                     'Content-Type': 'application/json',
                     ...options.headers
-                },
-                ...options
+                }
             });
 
             if (!response.ok) {
@@ -111,6 +111,10 @@ const API = {
     async createOrder(orderData) {
         return this.request('/orders', {
             method: 'POST',
+            headers: {
+                'X-Telegram-Init-Data': window.Telegram?.WebApp?.initData || '',
+                'X-WhatsApp-Token': (typeof App !== 'undefined' ? App.user?.token : '') || ''
+            },
             body: JSON.stringify(orderData)
         });
     },
@@ -130,7 +134,7 @@ const API = {
             if (token) searchParams.append('token', token);
         }
         const params = searchParams.toString() ? `?${searchParams.toString()}` : '';
-        return this.request(`/orders/me${params}`);
+        return this.request(`/orders/me${params}`, {headers: {'X-Telegram-Init-Data': window.Telegram?.WebApp?.initData || ''}});
     },
 
 

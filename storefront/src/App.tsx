@@ -1,67 +1,230 @@
-import {useEffect,useRef,useState,type FormEvent} from 'react';
-import {ArrowRight,ArrowUpRight,Search,ShoppingBag,Menu,X,Grid2X2,List,SlidersHorizontal,ChevronDown,Check,Package,Truck,FileText,Trash2,Download,ArrowLeft,MapPin,LifeBuoy} from 'lucide-react';
-import {products,productMap,sections,settings,money,unit,downloadPrice,downloadText,type Product} from './data';
-import {useCart,CartProvider} from './cart';
-import {Photo,ProductCard,Heading,Breadcrumb,Quantity,Empty,ConfirmDialog} from './ui';
-const image=(name:string)=>`${import.meta.env.BASE_URL}images/${name}.webp`;
-function useRoute(){const[route,setRoute]=useState(()=>location.hash.slice(1)||'/');useEffect(()=>{const handler=()=>{setRoute(location.hash.slice(1)||'/');window.scrollTo({top:0,behavior:'instant'});};window.addEventListener('hashchange',handler);return()=>window.removeEventListener('hashchange',handler);},[]);return route;}
-function Header({route}:{route:string}){
- const{lines}=useCart();const[search,setSearch]=useState('');const[menuOpen,setMenuOpen]=useState(false);const menu=useRef<HTMLDialogElement>(null);const count=lines.reduce((sum,l)=>sum+l.packs,0);
- useEffect(()=>{setMenuOpen(false);},[route]);useEffect(()=>{if(menuOpen)menu.current?.showModal();else menu.current?.close();document.body.style.overflow=menuOpen?'hidden':'';return()=>{document.body.style.overflow='';};},[menuOpen]);
- function find(e:FormEvent){e.preventDefault();location.hash='/catalog?q='+encodeURIComponent(search.trim());setMenuOpen(false);}
- return <><div className="announcement"><span>Курортные товары <strong>оптом</strong></span><a href="#/conditions">Как сделать заказ <ArrowUpRight size={13}/></a></div><header className="header"><div className="header-inner"><a href="#/" className="brand" aria-label="Курортник — главная">курортник<span className="brand-dot">.</span><small>ОПТОВЫЙ КАТАЛОГ</small></a><nav className="desktop-nav" aria-label="Основная навигация"><a href="#/catalog" aria-current={route.startsWith('/catalog')?'page':undefined}>Каталог <ChevronDown size={14}/></a><a href="#/about">О компании</a><a href="#/conditions">Оптовикам</a><a href="#/contacts">Контакты</a></nav><div className="header-actions"><a href="#/catalog?focus=search" className="header-search"><Search size={21}/><span>Поиск</span></a><a className="cart-link" href="#/cart"><ShoppingBag size={21}/><span>Заказ</span><b aria-label={`${count} упаковок в заказе`}>{count}</b></a><button className="mobile-toggle icon-button" aria-label="Открыть меню" aria-expanded={menuOpen} onClick={()=>setMenuOpen(true)}><Menu/></button></div></div></header>
- <dialog ref={menu} className="mobile-menu" onCancel={()=>setMenuOpen(false)}><div className="mobile-menu-top"><span className="brand">курортник.</span><button className="icon-button" aria-label="Закрыть меню" onClick={()=>setMenuOpen(false)}><X/></button></div><form onSubmit={find} className="search-field"><Search size={20}/><input placeholder="Название или артикул" aria-label="Поиск товаров" value={search} onChange={e=>setSearch(e.target.value)}/><button aria-label="Найти"><ArrowRight size={20}/></button></form><nav aria-label="Мобильная навигация">{[['/catalog','Каталог товаров'],['/cart','Мой заказ'],['/conditions','Условия для оптовиков'],['/about','О компании'],['/contacts','Связаться с нами']].map(([url,label])=><a href={'#'+url} key={url} onClick={()=>setMenuOpen(false)}>{label}<ArrowUpRight size={20}/></a>)}</nav><p className="muted">Демонстрационная витрина. Отправка реальных заказов не подключена.</p></dialog></>;
+import {lazy, Suspense, useEffect, useRef, useState, type FormEvent} from 'react';
+import {Check, Grid2X2, List, Package, Phone, Search, ShoppingBag, Trash2} from 'lucide-react';
+import {api, canOrder, money, packLimit, phoneHref, type Category, type Content, type Product} from './data';
+import {CartProvider, useCart} from './cart';
+import {Breadcrumb, ConfirmDialog, Empty, Photo, ProductCard, Quantity} from './ui';
+
+const Admin = lazy(() => import('./admin'));
+type ProductPageData = {items: Product[]; total: number; pages: number};
+
+function useData<T>(path: string) {
+  const [state, setState] = useState<{path: string; data?: T; error?: string}>();
+  useEffect(() => {
+    const controller = new AbortController();
+    api<T>(path, {signal: controller.signal})
+      .then(data => setState({path, data}))
+      .catch((error: Error) => { if (!controller.signal.aborted) setState({path, error: error.message}); });
+    return () => controller.abort();
+  }, [path]);
+  return state?.path === path ? state : undefined;
 }
-function Footer(){return <footer className="footer"><div className="container footer-main"><div className="footer-intro"><a href="#/" className="brand">курортник.</a><p>Всё, что нужно<br/>для хорошего сезона.</p><span className="small muted">Оптовые курортные товары</span></div><div><h3>Покупателям</h3><a href="#/catalog">Каталог товаров</a><a href="#/catalog?new=1">Новинки</a><a href="#/cart">Мой заказ</a><button className="text-button" onClick={downloadPrice}>Скачать демопрайс <Download size={15}/></button></div><div><h3>Информация</h3><a href="#/conditions">Условия опта</a><a href="#/conditions?tab=delivery">Доставка и оплата</a><a href="#/contacts">Контакты</a><a href="#/privacy">Данные и демоверсия</a></div><div className="footer-note"><LifeBuoy size={24} strokeWidth={1.4}/><h3>Нужна помощь с заказом?</h3><p>Соберите товары и сохраните заявку. Контакты менеджера появятся при подключении магазина.</p><a className="underline-link" href="#/contacts">Связаться <ArrowUpRight size={16}/></a></div></div><div className="container footer-bottom"><span>© {new Date().getFullYear()} Курортник · демоверсия</span><span>Designed & Developed by Mumortsev</span></div></footer>;}
-function Home(){return <>
- <section className="hero container"><div className="hero-content"><p className="eyebrow">Пляж · отдых · сувениры</p><h1>Хороший сезон<br/>начинается <em>здесь.</em></h1><p className="hero-lede">Курортные товары оптом для магазинов и торговых точек. Соберите летний ассортимент в одном заказе.</p><div className="actions"><a className="button" href="#/catalog">Открыть каталог <ArrowRight size={18}/></a><a className="button secondary" href="#/conditions">Условия опта</a></div><p className="hero-caption"><Package size={17}/> Заказ упаковками · цена за штуку и за упаковку</p></div><div className="hero-media"><a href="#/catalog?section=outdoor" className="hero-figure"><Photo cell={0} alt="Хлопковая пляжная сумка на светлом фоне"/><span>Всё для отдыха <ArrowUpRight size={18}/></span></a><a href="#/catalog?section=wear" className="hero-figure hero-figure--offset"><Photo cell={1} alt="Плетёная пляжная шляпа с синей лентой"/><span>Летний ассортимент <ArrowUpRight size={18}/></span></a><div className="hero-stamp">Море ближе,<br/><em>чем кажется.</em></div></div></section>
- <div className="container benefits"><div><Package size={22}/><span>Понятная фасовка<small>Штуки, упаковки и сумма рядом</small></span></div><div><ShoppingBag size={22}/><span>Закупка без лишних шагов<small>Добавляйте прямо из каталога</small></span></div><div><FileText size={22}/><span>Заказ в удобном виде<small>Сохраните подборку в файл</small></span></div></div>
- <section className="container section"><Heading eyebrow="Ассортимент к сезону" title="Найдётся для каждого магазина"><a href="#/catalog" className="underline-link">Весь каталог <ArrowRight size={18}/></a></Heading><div className="categories">{sections.map((s,i)=><a key={s.id} href={`#/catalog?section=${s.id}`} className="category-tile"><Photo cell={s.photo} alt={s.name}/><div><span className="category-num">0{i+1}</span><h3>{s.name}</h3><ArrowUpRight size={20}/></div><p>{s.description}</p></a>)}</div></section>
- <section className="season-section"><div className="container season-inner"><div><p className="eyebrow">Ваша летняя полка</p><h2>Собрать ассортимент.<br/><em>Освободить время.</em></h2><p>Пляжные принадлежности, летняя обувь, игрушки и сувениры — от первого товара до готовой оптовой заявки.</p><a className="button" href="#/catalog">Подобрать товары <ArrowRight size={18}/></a></div><div className="season-image"><img src={image('hero')} alt="Песчаный пляж и спокойное море" loading="lazy" width="1200" height="798"/><span>Для тех, кто делает лето ближе.</span></div></div></section>
- <section className="container section"><Heading eyebrow="Обновить витрину" title="Летние акценты"><a href="#/catalog?new=1" className="underline-link">Все новинки <ArrowRight size={18}/></a></Heading><div className="product-grid home-grid">{products.filter(p=>p.isNew).slice(0,4).map(p=><ProductCard key={p.id} p={p}/>)}</div><p className="demo-note">Демонстрационные цены и фасовка. Предметные изображения созданы для этой витрины и не подтверждают реальный ассортимент.</p></section>
- <section className="container section how-section"><Heading eyebrow="Просто и по делу" title="От выбора до заявки"/><div className="steps">{[['01','Найдите товары','Выберите категорию или введите название и артикул в поиске.'],['02','Укажите упаковки','Сразу видно, сколько получится штук и какая будет сумма.'],['03','Сохраните заказ','Проверьте подборку и скачайте заявку для дальнейшего согласования.']].map(([n,t,d])=><div key={n}><span>{n}</span><h3>{t}</h3><p>{d}</p></div>)}</div><a href="#/conditions" className="underline-link">Подробнее об оптовом заказе <ArrowRight size={18}/></a></section>
- </>;}
-function Catalog({query}:{query:URLSearchParams}){
- const[search,setSearch]=useState(query.get('q')||'');const[section,setSection]=useState(query.get('section')||'');const[category,setCategory]=useState('');const[sort,setSort]=useState('default');const[stock,setStock]=useState(false);const[onlyNew,setOnlyNew]=useState(query.get('new')==='1');const[view,setView]=useState<'grid'|'list'>('grid');const[page,setPage]=useState(1);const[filters,setFilters]=useState(false);const searchRef=useRef<HTMLInputElement>(null);
- useEffect(()=>{if(query.get('focus'))searchRef.current?.focus();},[]);
- const categories=[...new Set(products.filter(p=>!section||p.section===section).map(p=>p.category))];
- const found=products.filter(p=>(!section||p.section===section)&&(!category||p.category===category)&&(!stock||p.available>0)&&(!onlyNew||p.isNew)&&(!search.trim()||`${p.name} ${p.sku} ${p.category}`.toLocaleLowerCase('ru').includes(search.trim().toLocaleLowerCase('ru')))).sort((a,b)=>sort==='price-up'?a.price-b.price:sort==='price-down'?b.price-a.price:sort==='name'?a.name.localeCompare(b.name,'ru'):0);
- const pages=Math.max(1,Math.ceil(found.length/settings.pageSize));const current=Math.min(page,pages);const visible=found.slice((current-1)*settings.pageSize,current*settings.pageSize);
- const reset=()=>{setSearch('');setSection('');setCategory('');setStock(false);setOnlyNew(false);setSort('default');setPage(1);};
- function selectSection(id:string){setSection(id);setCategory('');setPage(1);}
- return <div className="container catalog-page"><Breadcrumb name="Каталог"/><div className="catalog-heading"><div><p className="eyebrow">Оптовый ассортимент</p><h1>Каталог товаров</h1></div><button className="button secondary" onClick={downloadPrice}><Download size={18}/> Демопрайс</button></div><p className="demo-note catalog-demo"><span className="status-dot"/> Демоверсия: цены, наличие и фасовка приведены для примера. Реальные заказы не отправляются.</p>
- <form className="catalog-search search-field" onSubmit={e=>{e.preventDefault();setPage(1);}}><Search size={24}/><input ref={searchRef} type="search" aria-label="Поиск по названию или артикулу" placeholder="Найти товар по названию или артикулу" value={search} onChange={e=>{setSearch(e.target.value);setPage(1);}}/><button className="button" type="submit">Найти</button></form>
- <div className="section-pills" aria-label="Разделы каталога"><button className={!section?'active':''} onClick={()=>selectSection('')}>Все товары</button>{sections.map(s=><button key={s.id} className={section===s.id?'active':''} onClick={()=>selectSection(s.id)}>{s.short}</button>)}</div>
- <div className="catalog-layout"><aside className={`filters ${filters?'filters--open':''}`} id="catalog-filters"><h2>Уточнить выбор</h2><label htmlFor="category">Категория</label><select id="category" value={category} onChange={e=>{setCategory(e.target.value);setPage(1);}}><option value="">Все категории</option>{categories.map(c=><option key={c}>{c}</option>)}</select><label className="checkbox"><input type="checkbox" checked={stock} onChange={e=>{setStock(e.target.checked);setPage(1);}}/>Есть в демокаталоге</label><label className="checkbox"><input type="checkbox" checked={onlyNew} onChange={e=>{setOnlyNew(e.target.checked);setPage(1);}}/>Только новинки</label><button className="reset-button" onClick={reset}>Сбросить фильтры</button><div className="filter-help"><Package size={25} strokeWidth={1.3}/><h3>Покупайте упаковками</h3><p>На карточке указаны цена за единицу, фасовка и стоимость упаковки.</p><a href="#/conditions">Как это работает <ArrowRight size={15}/></a></div></aside>
- <div className="catalog-results"><div className="catalog-toolbar"><p role="status" aria-live="polite">Найдено: <strong>{found.length}</strong></p><button className="filter-toggle button secondary" aria-expanded={filters} aria-controls="catalog-filters" onClick={()=>setFilters(!filters)}><SlidersHorizontal size={17}/> Фильтры</button><div className="toolbar-right"><label className="sort-label">Сортировка<select value={sort} onChange={e=>{setSort(e.target.value);setPage(1);}}><option value="default">По умолчанию</option><option value="price-up">Сначала дешевле за шт.</option><option value="price-down">Сначала дороже за шт.</option><option value="name">По названию</option></select></label><div className="view-switch" aria-label="Вид каталога"><button aria-label="Карточками" aria-pressed={view==='grid'} onClick={()=>setView('grid')}><Grid2X2 size={19}/></button><button aria-label="Списком" aria-pressed={view==='list'} onClick={()=>setView('list')}><List size={22}/></button></div></div></div>
- {visible.length?<div className={view==='list'?'product-list':'product-grid'}>{visible.map(p=><ProductCard p={p} key={p.id} list={view==='list'}/>)}</div>:<div className="empty"><Search size={34}/><h2>Ничего не найдено</h2><p>Попробуйте другое название или уберите часть фильтров.</p><button className="button" onClick={reset}>Показать все товары</button></div>}
- {pages>1&&<nav className="pagination" aria-label="Страницы каталога"><button disabled={current===1} onClick={()=>{setPage(current-1);document.querySelector('.catalog-results')?.scrollIntoView({block:'start'});}} aria-label="Предыдущая страница"><ArrowLeft size={18}/></button>{Array.from({length:pages},(_,i)=><button key={i} aria-current={current===i+1?'page':undefined} onClick={()=>{setPage(i+1);document.querySelector('.catalog-results')?.scrollIntoView({block:'start'});}}>{i+1}</button>)}<button disabled={current===pages} onClick={()=>{setPage(current+1);document.querySelector('.catalog-results')?.scrollIntoView({block:'start'});}} aria-label="Следующая страница"><ArrowRight size={18}/></button></nav>}
- </div></div></div>;
+
+function useRoute() {
+  const [route, setRoute] = useState(() => location.hash.slice(1) || '/');
+  useEffect(() => {
+    const change = () => { setRoute(location.hash.slice(1) || '/'); window.scrollTo(0, 0); };
+    window.addEventListener('hashchange', change);
+    return () => window.removeEventListener('hashchange', change);
+  }, []);
+  return route;
 }
-function ProductPage({p}:{p:Product}){
- const[n,setN]=useState(p.minimum);const{add}=useCart();const[zoom,setZoom]=useState(false);const dialog=useRef<HTMLDialogElement>(null);useEffect(()=>{if(zoom)dialog.current?.showModal();else dialog.current?.close();},[zoom]);
- return <div className="container product-page"><Breadcrumb name={p.name} parent="Каталог"/><div className="product-detail"><div><button className="detail-photo" onClick={()=>setZoom(true)} aria-label={`Увеличить фотографию ${p.name}`}><Photo cell={p.photo} alt={p.name}/><span>Рассмотреть изображение <PlusSign/></span></button><p className="small muted">Предметная иллюстрация для демоверсии. Точная модель и комплектация уточняются по актуальному прайсу.</p></div><div className="product-info"><p className="eyebrow">{p.category} · {p.sku}</p><h1>{p.name}</h1><p className={`availability ${!p.available?'unavailable':''}`}><span className="status-dot"/>{p.available?'Демо: в наличии':'Демо: нет в наличии'}</p><p>{p.description}</p><div className="detail-prices"><div><span>Цена за {unit(p)==='пар'?'пару':'штуку'}</span><strong>{money(p.price)}</strong></div><div><span>Упаковка · {p.pack} {unit(p)}</span><strong>{money(p.price*p.pack)}</strong></div></div><div className="buy-panel"><label>Количество упаковок</label><div className="detail-quantity"><Quantity value={n} min={p.minimum} max={Math.max(p.minimum,p.available)} onChange={setN}/><span>от {p.minimum} уп. · {p.pack} {unit(p)} / уп.</span></div><div className="detail-total"><span>{n} уп. · {n*p.pack} {unit(p)}</span><strong>{money(n*p.price*p.pack)}</strong></div><button className="button" disabled={!p.available} onClick={()=>add(p,n)}><ShoppingBag size={19}/> Добавить в заказ</button><p className="small muted">Цена и фасовка демонстрационные. {p.detail}.</p></div><div className="details-table"><div><span>Артикул</span><strong>{p.sku}</strong></div><div><span>Материал</span><strong>{p.material}</strong></div><div><span>Минимальный заказ</span><strong>{p.minimum} уп. / {p.minimum*p.pack} {unit(p)}</strong></div><div><span>Раздел</span><a href={`#/catalog?section=${p.section}`}>{sections.find(s=>s.id===p.section)?.name}</a></div></div></div></div>
- <section className="section"><Heading title="Дополнить заказ"/><div className="product-grid home-grid">{products.filter(x=>x.id!==p.id&&x.available).slice(0,4).map(x=><ProductCard key={x.id} p={x}/>)}</div></section><dialog ref={dialog} className="photo-dialog" onCancel={()=>setZoom(false)} onClick={e=>{if(e.target===e.currentTarget)setZoom(false);}}><button className="dialog-x icon-button" aria-label="Закрыть фотографию" onClick={()=>setZoom(false)}><X/></button><Photo cell={p.photo} alt={p.name}/><p>{p.name} · предметная иллюстрация</p></dialog></div>;
+
+function Header({content}: {content?: Content}) {
+  const {lines} = useCart();
+  const [search, setSearch] = useState('');
+  return <header className="header"><div className="header-inner live-header">
+    <a href="#/" className="brand">курортник<span className="brand-dot">.</span><small>ОПТОВЫЙ МАГАЗИН</small></a>
+    <form className="search-field" onSubmit={event => {
+      event.preventDefault();
+      location.hash = '/catalog?q=' + encodeURIComponent(search.trim());
+    }}>
+      <Search size={20}/><input type="search" aria-label="Название или артикул" placeholder="Название или артикул" value={search} onChange={event => setSearch(event.target.value)}/>
+      <button aria-label="Найти товар"><Search size={20}/></button>
+    </form>
+    <nav aria-label="Основная навигация"><a href="#/catalog">Каталог</a><a href="#/conditions">Условия</a><a href="#/contacts">Контакты</a></nav>
+    <div className="header-actions">
+      {content?.phone && <a className="header-phone" href={phoneHref(content.phone)} aria-label={'Позвонить ' + content.phone}><Phone size={20}/></a>}
+      <a className="cart-link" href="#/cart"><ShoppingBag size={20}/><span>Корзина</span><b aria-label={`${lines.reduce((sum, line) => sum + line.packs, 0)} упаковок`}>{lines.reduce((sum, line) => sum + line.packs, 0)}</b></a>
+    </div>
+  </div></header>;
 }
-function PlusSign(){return <span aria-hidden="true">＋</span>;}
-function CartPage({checkout=false}:{checkout?:boolean}){
- const{lines,setPacks,remove,clear}=useCart();const[confirm,setConfirm]=useState(false);const[downloaded,setDownloaded]=useState(false);const[error,setError]=useState('');const items=lines.flatMap(l=>{const p=productMap.get(l.id);return p?[{...l,p}]:[];});const total=items.reduce((s,l)=>s+l.p.price*l.p.pack*l.packs,0);const packs=items.reduce((s,l)=>s+l.packs,0);const count=items.reduce((s,l)=>s+l.packs*l.p.pack,0);const eligible=!settings.minOrderRubles||total>=settings.minOrderRubles;
- const orderText=()=>['КУРОРТНИК — ДЕМОНСТРАЦИОННАЯ ЗАЯВКА','Заказ не отправлен. Цены и наличие приведены для примера.','',...items.map(l=>`${l.p.sku} | ${l.p.name}\n${l.packs} уп. × ${l.p.pack} ${unit(l.p)} | ${money(l.p.price)} за ед. | ${money(l.packs*l.p.pack*l.p.price)}`),'',`Итого: ${money(total)} | ${packs} упаковок | ${count} единиц`];
- function exportOrder(){downloadText('kurortnik-order.txt',orderText().join('\n'));setDownloaded(true);}
- function submit(e:FormEvent<HTMLFormElement>){e.preventDefault();setError('');const form=e.currentTarget;const data=new FormData(form);const phone=String(data.get('phone')||'').replace(/\D/g,'');if(phone.length<10||phone.length>15){setError('Проверьте телефон: нужно от 10 до 15 цифр.');form.querySelector<HTMLInputElement>('[name=phone]')?.focus();return;}if(!eligible)return;const contacts=['',`Имя: ${data.get('name')}`,`Телефон: ${data.get('phone')}`,`Организация: ${data.get('company')||'Не указана'}`,`Город: ${data.get('city')}`,`Комментарий: ${data.get('comment')||'Нет'}`];downloadText('kurortnik-request.txt',[...orderText(),...contacts].join('\n'));setDownloaded(true);}
- if(!items.length)return <div className="container"><Breadcrumb name="Мой заказ"/><Empty title="Здесь будет ваш заказ" text="Добавляйте товары упаковками. Корзина рассчитает количество и общую стоимость."/></div>;
- return <div className="container cart-page"><Breadcrumb name={checkout?'Подготовка заявки':'Мой заказ'}/><div className="catalog-heading"><div><p className="eyebrow">Всё в одном месте</p><h1>{checkout?'Подготовить заявку':'Мой заказ'}</h1></div><a href="#/catalog" className="underline-link"><ArrowLeft size={17}/> Продолжить подбор</a></div><div className="cart-layout"><div>{checkout?<section className="checkout-panel"><h2>Контактные данные</h2><p>Данные попадут только в скачиваемый файл. Отправка менеджеру в демоверсии не выполняется.</p><form id="checkout-form" onSubmit={submit}><div className="form-grid"><label>Ваше имя *<input name="name" required autoComplete="name" maxLength={100}/></label><label>Телефон *<input name="phone" type="tel" required autoComplete="tel" placeholder="+7 999 123-45-67" maxLength={24}/></label><label>Организация / торговая точка<input name="company" autoComplete="organization" maxLength={150}/></label><label>Город *<input name="city" required autoComplete="address-level2" maxLength={100}/></label></div><label>Комментарий к заказу<textarea name="comment" rows={4} maxLength={1500} placeholder="Пожелания по ассортименту, размерам и доставке"/></label><label className="checkbox"><input required type="checkbox"/>Понимаю, что скачивание заявки не отправляет заказ и не резервирует товар.</label>{error&&<p role="alert" className="form-error">{error}</p>}<button className="button" type="submit" disabled={!eligible}><Download size={18}/> Скачать заявку с контактами</button></form></section>:<><div className="cart-list-top"><span>{items.length} позиций · {packs} уп.</span><button className="text-button muted" onClick={()=>setConfirm(true)}><Trash2 size={16}/> Очистить заказ</button></div>{items.map(({id,p,packs:n})=><article className="cart-item" key={id}><a href={`#/product/${id}`} className="cart-photo"><Photo cell={p.photo} alt={p.name}/></a><div className="cart-item-info"><p className="small muted">{p.sku}</p><h2><a href={`#/product/${id}`}>{p.name}</a></h2><p className="small">{p.pack} {unit(p)} / уп. · {money(p.price)} / ед.</p><button className="text-button remove-button" onClick={()=>remove(id)} aria-label={`Убрать ${p.name} из заказа`}>Убрать</button></div><div className="cart-quantity"><Quantity value={n} min={p.minimum} max={p.available} onChange={v=>setPacks(id,v)} label={`Упаковок товара ${p.name}`}/><span>{n*p.pack} {unit(p)}</span></div><strong className="cart-line-total">{money(n*p.price*p.pack)}</strong></article>)}</>}
- {downloaded&&<div className="download-status" role="status"><Check size={22}/><div><strong>Файл подготовлен для скачивания</strong><p>Заявка не отправлена менеджеру. Корзина сохранена, реальная бронь товаров не создана.</p></div></div>}</div>
- <aside className="order-summary"><h2>Ваш оптовый заказ</h2><dl><div><dt>Позиций</dt><dd>{items.length}</dd></div><div><dt>Упаковок</dt><dd>{packs}</dd></div><div><dt>Единиц товара</dt><dd>{count}</dd></div></dl><div className="summary-total"><span>Итого</span><strong>{money(total)}</strong></div><p className="small muted">Демонстрационная сумма. Доставка не включена; актуальные цены и условия требуют согласования.</p>{settings.minOrderRubles!==null&&<p>{eligible?'Минимальная сумма набрана':`До минимума ещё ${money(settings.minOrderRubles-total)}`}</p>}{!checkout&&<><a className={`button ${!eligible?'disabled':''}`} href={eligible?'#/checkout':'#/cart'}>Подготовить заявку <ArrowRight size={17}/></a><button className="button secondary" onClick={exportOrder}><Download size={17}/> Скачать состав заказа</button></>}<a href="#/conditions" className="underline-link">Условия оптовой закупки</a><p className="summary-safety"><FileText size={18}/>Без оплаты и регистрации</p></aside></div><ConfirmDialog open={confirm} onClose={()=>setConfirm(false)} onConfirm={clear}/></div>;
+
+function Footer({content}: {content?: Content}) {
+  return <footer className="footer"><div className="container footer-main">
+    <div><a href="#/" className="brand">курортник.</a><p>Курортные товары оптом</p></div>
+    <div><h3>Покупателям</h3><a href="#/catalog">Каталог</a><a href="#/cart">Корзина</a><a href="#/conditions">Условия и доставка</a></div>
+    <div><h3>Информация</h3><a href="#/contacts">Контакты</a>{Object.entries(content?.pages ?? {}).map(([slug, page]) => <a key={slug} href={'#/info/' + slug}>{page.title}</a>)}</div>
+    <div><h3>Связь с магазином</h3>{content?.phone && <a href={phoneHref(content.phone)}>{content.phone}</a>}{content?.email && <a href={'mailto:' + content.email}>{content.email}</a>}{content?.address && <p>{content.address}</p>}</div>
+  </div></footer>;
 }
-const faqs=[['Как считается оптовый заказ?','Количество выбирается упаковками. Цена за единицу умножается на количество единиц в упаковке и на число упаковок. Все три значения видны до добавления в заказ.'],['Можно ли купить одну штуку?','В этой витрине заказ собирается упаковками. Минимум по каждой позиции указан в карточке. Возможность поштучной продажи согласовывается с поставщиком.'],['Какая минимальная сумма закупки?','Общий порог закупки пока не подтверждён клиентом, поэтому в демоверсии он не установлен. Минимальное количество упаковок для каждого товара продолжает учитываться.'],['Как устроена доставка?','Способ доставки, регион, стоимость и сроки согласовываются с менеджером. Демо не обещает бесплатную доставку и не рассчитывает неподтверждённые тарифы.'],['Как оплатить заказ?','Сначала нужно согласовать состав и наличие с поставщиком. Онлайн-оплата в этой демонстрационной витрине не подключена.'],['Скачал заявку — заказ уже принят?','Нет. Скачивание создаёт файл только на вашем устройстве. Оно не отправляет данные менеджеру и не резервирует товары.'],['Можно ли вернуться к корзине позже?','Да, список товаров и количество упаковок сохраняются в этом браузере, если разрешено локальное хранилище. Контактные данные из формы не сохраняются.']];
-function Conditions(){return <div className="container info-page"><Breadcrumb name="Оптовикам"/><div className="info-intro"><p className="eyebrow">Понятно с первого заказа</p><h1>Оптовая закупка.<br/><em>Без сложностей.</em></h1><p>Упаковки, количество и итоговая сумма — на каждом шаге. Здесь собраны правила работы демонстрационной витрины.</p></div><div className="info-cards"><div><Package/><h2>Заказ упаковками</h2><p>У каждой позиции своя фасовка и минимальное количество. Счётчик учитывает эти ограничения.</p></div><div><Truck/><h2>Доставка по согласованию</h2><p>Регион, способ и стоимость перевозки нужно подтвердить у поставщика перед оформлением реальной закупки.</p></div><div><FileText/><h2>Сначала заявка</h2><p>Соберите ассортимент, проверьте количество и скачайте заявку. Реальная отправка и оплата не подключены.</p></div></div><div className="faq"><h2>Частые вопросы</h2>{faqs.map(([q,a])=><details key={q}><summary>{q}<ChevronDown size={20}/></summary><p>{a}</p></details>)}</div><div className="info-callout"><h2>Начнём с ассортимента?</h2><a href="#/catalog" className="button">Перейти в каталог <ArrowRight size={18}/></a></div></div>;}
-function Contacts(){return <div className="container info-page"><Breadcrumb name="Контакты"/><div className="info-intro"><p className="eyebrow">Поможем разобраться</p><h1>Хороший заказ<br/>начинается <em>с диалога.</em></h1><p>Подготовьте список товаров и пожелания к закупке. Так проще обсудить ассортимент, фасовку и доставку.</p></div><div className="contact-panels"><div className="contact-card"><LifeBuoy size={32}/><h2>Связь с менеджером</h2><p>Подтверждённые телефон, почта и мессенджеры клиента пока не предоставлены. В демоверсии нет вымышленных контактов и кнопок звонка.</p><a href="#/cart" className="button">Перейти к моей заявке <ArrowRight size={18}/></a></div><div className="contact-card sand"><MapPin size={32}/><h2>Склад и самовывоз</h2><p>Адрес склада, график выдачи и доступность самовывоза будут опубликованы после подтверждения поставщиком.</p><a href="#/conditions" className="underline-link">Доставка и условия закупки <ArrowRight size={17}/></a></div></div><div className="contact-bottom"><Photo cell={2} alt="Пляжные полотенца в морской гамме"/><div><p className="eyebrow">До разговора с менеджером</p><h2>Всё важное —<br/>в одной заявке.</h2><p>Укажите город, торговую точку и пожелания к доставке. Контакты останутся только в скачанном файле.</p><a href="#/catalog" className="underline-link">Собрать заказ <ArrowRight size={18}/></a></div></div></div>;}
-function About(){return <div className="container info-page"><Breadcrumb name="О компании"/><div className="info-intro"><p className="eyebrow">Курортник · оптовые товары</p><h1>Летний ассортимент.<br/><em>Продуманный выбор.</em></h1><p>Каталог для магазинов, сезонных торговых точек и предпринимателей, которым нужны курортные товары оптом.</p></div><div className="about-layout"><img src={image('hero')} alt="Морской берег на закате" loading="lazy"/><div><h2>От пляжной сумки<br/>до сувенирной полки.</h2><p>В основе концепции — ассортимент проекта «Курортник»: принадлежности для пляжа, летняя обувь, полотенца, сумки, игрушки и сувениры.</p><p>Интерфейс помогает быстро собрать закупку: увидеть фасовку, выбрать упаковки и проверить общую сумму.</p><p className="small muted">Это демонстрационная адаптация. Сведения об опыте компании, партнёрах, складе и реальных условиях не выдумываются.</p><a href="#/catalog" className="button">Посмотреть ассортимент <ArrowRight size={18}/></a></div></div></div>;}
-function Privacy(){return <div className="container info-page narrow"><Breadcrumb name="Данные и демоверсия"/><h1>О демоверсии</h1><h2>Товары и цены</h2><p>Категории основаны на проекте «Курортник». Названия моделей, цены, фасовка и остатки в этой витрине демонстрационные. Сгенерированные предметные изображения показывают концепцию, а не реальные товары поставщика. Витрина не является публичной офертой.</p><h2>Корзина и данные</h2><p>В локальном хранилище браузера сохраняются только идентификаторы товаров и количество упаковок. Данные контактной формы не отправляются на сервер и не сохраняются в браузере. Они включаются в текстовый файл на вашем устройстве при скачивании заявки.</p><h2>Заказы и оплата</h2><p>Скачивание файла не отправляет заявку менеджеру, не резервирует товар и не подтверждает заказ. Сайт не принимает оплату. Телефон, адрес склада, условия доставки и общий порог закупки будут добавлены после подтверждения клиентом.</p><h2>Авторство</h2><p>Визуальная основа: DemoShop Nuvi, sajanv88, лицензия MIT. Адаптация под оптовый каталог и разработка — Mumortsev. Фоновая фотография моря — Unsplash. Предметные изображения созданы специально для демоверсии.</p><a href="#/catalog" className="button">В каталог <ArrowRight size={18}/></a></div>;}
-function Site(){const route=useRoute();const[path,search='']=route.split('?');const query=new URLSearchParams(search);const{notice}=useCart();const main=useRef<HTMLElement>(null);const initial=useRef(true);
- useEffect(()=>{const names:Record<string,string>={'/':'Курортные товары оптом','/catalog':'Каталог товаров','/cart':'Мой заказ','/checkout':'Подготовить заявку','/contacts':'Контакты','/conditions':'Условия опта','/about':'О компании','/privacy':'Данные и демоверсия'};const p=path.startsWith('/product/')?productMap.get(path.split('/')[2]):null;document.title=`${p?.name||names[path]||'Страница не найдена'} — Курортник`;if(initial.current){initial.current=false;}else if(!route.includes('focus=search')) main.current?.focus({preventScroll:true});},[route,path]);
- let content:React.ReactNode;if(path==='/')content=<Home/>;else if(path==='/catalog')content=<Catalog key={route} query={query}/>;else if(path==='/cart'||path==='/checkout')content=<CartPage key={path} checkout={path==='/checkout'}/>;else if(path.startsWith('/product/')){const p=productMap.get(path.split('/')[2]);content=p?<ProductPage key={p.id} p={p}/>:<div className="container"><Empty title="Товар не найден" text="Возможно, ссылка изменилась. Посмотрите актуальный демонстрационный каталог."/></div>;}else if(path==='/conditions')content=<Conditions/>;else if(path==='/contacts')content=<Contacts/>;else if(path==='/about')content=<About/>;else if(path==='/privacy')content=<Privacy/>;else content=<div className="container"><Empty title="Страница не найдена" text="Перейдите в каталог и продолжите подбор товаров."/></div>;
- return <><a className="skip-link" href="#main" onClick={e=>{e.preventDefault();main.current?.focus();}}>Перейти к содержимому</a><Header route={route}/><main id="main" ref={main} tabIndex={-1}>{content}</main><Footer/><div className={`toast ${notice?'toast--visible':''}`} role="status" aria-live="polite">{notice&&<><Check size={20}/><span>{notice}</span><a href="#/cart">К заказу <ArrowRight size={16}/></a></>}</div></>;
+
+function Feedback({error}: {error?: string}) {
+  return error ? <p role="alert" className="error-text">{error}</p> : <p role="status">Загрузка…</p>;
 }
-export default function App(){return <CartProvider><Site/></CartProvider>;}
+
+function Home({content, categories}: {content: Content; categories: Category[]}) {
+  const groups = useData<{featured: Product[]; offers: Product[]; newest: Product[]}>('/shop/highlights');
+  return <>
+    <section className="hero container live-hero">
+      <div className="hero-content"><p className="eyebrow">Пляж · отдых · сувениры</p><h1>{content.banner_title}</h1><p className="hero-lede">{content.banner_text}</p>
+        <div className="actions"><a className="button" href="#/catalog">Открыть каталог</a><a className="button secondary" href="#/conditions">Условия опта</a></div>
+        <p className="hero-caption"><Package size={20}/> Заказ упаковками</p>
+      </div>
+      <div className="live-hero-image"><Photo src={content.banner_image} alt="Курортный ассортимент" eager/></div>
+    </section>
+    <section className="container section"><h2>Категории товаров</h2><div className="categories">
+      {categories.map(category => <a key={category.id} className="category-tile" href={`#/catalog?category=${category.id}`}><Photo src={category.image} alt={category.name}/><div><h3>{category.name}</h3></div></a>)}
+    </div></section>
+    {groups?.data ? ([['Популярные товары', groups.data.featured], ['Новинки', groups.data.newest], ['Специальные предложения', groups.data.offers]] as const)
+      .filter(([, products]) => products.length)
+      .map(([title, products]) => <section key={title} className="container section"><h2>{title}</h2><div className="product-grid home-grid">{products.map(product => <ProductCard key={product.id} p={product}/>)}</div></section>) : <div className="container"><Feedback error={groups?.error}/></div>}
+    <section className="container section how-section"><h2>Как оформить заявку</h2>
+      <ol className="steps live-steps">{content.steps.map((step, index) => <li key={index}>{step}</li>)}</ol>
+      <p>{content.conditions}</p><a href="#/conditions" className="underline-link">Условия закупки и доставки</a>
+    </section>
+  </>;
+}
+
+function Catalog({query, categories}: {query: URLSearchParams; categories: Category[]}) {
+  const [draft, setDraft] = useState(query.get('q') ?? '');
+  const [search, setSearch] = useState(draft);
+  const [category, setCategory] = useState(query.get('category') ?? '');
+  const [subcategory, setSubcategory] = useState('');
+  const [sort, setSort] = useState('name');
+  const [stock, setStock] = useState('');
+  const [newOnly, setNewOnly] = useState(query.get('new') === '1');
+  const [country, setCountry] = useState('');
+  const [view, setView] = useState<'grid' | 'list'>('grid');
+  const [page, setPage] = useState(1);
+  const filters = new URLSearchParams({q:search, category, subcategory, sort, stock, country, newest:String(newOnly), page:String(page)});
+  for (const key of ['category', 'subcategory']) if (!filters.get(key)) filters.delete(key);
+  const result = useData<ProductPageData>('/shop/products?' + filters);
+  const children = categories.find(item => String(item.id) === category)?.subcategories ?? [];
+
+  return <div className="container catalog-page"><Breadcrumb name="Каталог"/><h1>Каталог товаров</h1>
+    <form className="catalog-search search-field" onSubmit={event => { event.preventDefault(); setSearch(draft.trim()); setPage(1); }}>
+      <Search size={24}/><input type="search" aria-label="Поиск по названию или артикулу" placeholder="Название или артикул" value={draft} onChange={event => setDraft(event.target.value)}/><button className="button">Найти</button>
+    </form>
+    <div className="live-filters">
+      <label>Категория<select value={category} onChange={event => {setCategory(event.target.value); setSubcategory(''); setPage(1);}}><option value="">Все категории</option>{categories.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
+      {children.length > 0 && <label>Подкатегория<select value={subcategory} onChange={event => {setSubcategory(event.target.value); setPage(1);}}><option value="">Все подкатегории</option>{children.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>}
+      <label>Наличие<select value={stock} onChange={event => {setStock(event.target.value); setPage(1);}}><option value="">Любое</option><option value="yes">В наличии</option><option value="no">Нет в наличии</option></select></label>
+      <label>Страна<input value={country} onChange={event => {setCountry(event.target.value); setPage(1);}}/></label>
+      <label>Сортировка<select value={sort} onChange={event => {setSort(event.target.value); setPage(1);}}><option value="name">По названию</option><option value="price_asc">Сначала дешевле</option><option value="price_desc">Сначала дороже</option><option value="newest">Сначала новые</option></select></label>
+      <label className="check-label"><input type="checkbox" checked={newOnly} onChange={event => {setNewOnly(event.target.checked); setPage(1);}}/> Только новинки</label>
+    </div>
+    <div className="catalog-toolbar"><span role="status">{result?.data && `Найдено: ${result.data.total}`}</span><div className="view-switch"><button aria-label="Плиткой" aria-pressed={view==='grid'} onClick={()=>setView('grid')}><Grid2X2/></button><button aria-label="Списком" aria-pressed={view==='list'} onClick={()=>setView('list')}><List/></button></div></div>
+    {!result?.data ? <Feedback error={result?.error}/> : result.data.items.length
+      ? <div className={view === 'list' ? 'product-list' : 'product-grid'}>{result.data.items.map(product => <ProductCard list={view==='list'} key={product.id} p={product}/>)}</div>
+      : <p>Товары по этим условиям не найдены.</p>}
+    {result?.data && result.data.pages > 1 && <nav className="pagination" aria-label="Страницы каталога"><button disabled={page===1} onClick={()=>setPage(page-1)}>Назад</button><span>{page} из {result.data.pages}</span><button disabled={page>=result.data.pages} onClick={()=>setPage(page+1)}>Далее</button></nav>}
+  </div>;
+}
+
+function ProductPage({id}: {id: string}) {
+  const result = useData<Product>('/shop/products/' + encodeURIComponent(id));
+  return <div className="container product-page">{result?.data ? <ProductDetails product={result.data}/> : <Feedback error={result?.error}/>}</div>;
+}
+
+function ProductDetails({product}: {product: Product}) {
+  const [photo, setPhoto] = useState(0);
+  return <><Breadcrumb name={product.name} parent="Каталог"/><div className="product-detail">
+    <div><Photo src={product.images[photo]} alt={product.name} eager/>{product.images.length > 1 && <div className="gallery-thumbs">{product.images.map((src,index)=><button key={src} onClick={()=>setPhoto(index)} aria-label={`Фотография ${index+1}`} aria-pressed={photo===index}><Photo src={src} alt=""/></button>)}</div>}</div>
+    <div><h1>{product.name}</h1>{product.country && <p>Страна: {product.country}</p>}<ProductCard p={product} detail/></div>
+  </div></>;
+}
+
+function CartPage() {
+  const {lines, setPacks, remove, clear} = useCart();
+  const ids = lines.map(line => line.id).join(',');
+  const result = useData<Product[]>('/shop/cart-products?ids=' + ids);
+  const [confirm, setConfirm] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [number, setNumber] = useState<number>();
+  const attempt = useRef<{fingerprint: string; key: string} | null>(null);
+  const submitting = useRef(false);
+  const items = lines.map(line => ({...line, product: result?.data?.find(product => product.id === line.id)}));
+  const invalid = items.some(({product,packs}) => !product || !canOrder(product) || packs < product.minimum || packs > packLimit(product));
+  const total = items.reduce((sum, item) => sum + (item.product ? item.product.price * item.product.pack * item.packs : 0), 0);
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (submitting.current || invalid || !lines.length) return;
+    const body = JSON.stringify({...Object.fromEntries(new FormData(event.currentTarget)), items:lines.map(line => ({product_id:line.id,quantity_packs:line.packs}))});
+    submitting.current = true;
+    setBusy(true); setError('');
+    try {
+      const bytes = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(body));
+      const fingerprint = Array.from(new Uint8Array(bytes), byte => byte.toString(16).padStart(2,'0')).join('');
+      if (attempt.current?.fingerprint !== fingerprint) {
+        let previous: {fingerprint: string; key: string} | undefined;
+        try { previous = JSON.parse(sessionStorage.getItem('kurortnik-submission') ?? 'null'); } catch { /* In-memory retry remains available. */ }
+        attempt.current = previous?.fingerprint === fingerprint ? previous : {fingerprint,key:crypto.randomUUID()};
+        try { sessionStorage.setItem('kurortnik-submission',JSON.stringify(attempt.current)); } catch { /* Storage may be blocked. */ }
+      }
+      const response = await api<{id:number}>('/shop/orders', {method:'POST', body, headers:{'Idempotency-Key':attempt.current.key}});
+      try { sessionStorage.removeItem('kurortnik-submission'); } catch { /* Storage may be blocked. */ }
+      setNumber(response.id); clear();
+    } catch (err) { setError((err as Error).message); }
+    finally { submitting.current = false; setBusy(false); }
+  }
+  if (number) return <div className="container info-page"><h1>Заявка отправлена</h1><p role="status">Заявка №{number} успешно отправлена. Наш менеджер свяжется с вами для подтверждения наличия, стоимости и условий доставки.</p><a className="button" href="#/catalog">Вернуться в каталог</a></div>;
+  if (!lines.length) return <div className="container info-page"><Empty title="Корзина пуста" text="Добавьте товары из каталога."/></div>;
+  return <div className="container cart-page"><Breadcrumb name="Корзина"/><h1>Корзина</h1>
+    {!result?.data ? <Feedback error={result?.error}/> : <div className="cart-layout"><div className="live-cart-lines">
+      {items.map(({product,id,packs}) => <article key={id} className="live-cart-line">
+        {product && <Photo src={product.images[0]} alt={product.name}/>}
+        <div><h2>{product?.name ?? `Товар №${id}`}</h2>{product && <><p>{packs} уп. × {product.pack} шт. = {packs*product.pack} шт.</p><strong>{money(packs*product.pack*product.price)}</strong></>}
+        {product && canOrder(product) && !busy ? <Quantity value={packs} min={product.minimum} max={packLimit(product)} label={'Упаковок товара ' + product.name} onChange={value=>setPacks(id,value)}/> : !busy && <p>Товар сейчас недоступен.</p>}
+        </div><button type="button" className="icon-button" aria-label={'Убрать ' + (product?.name ?? id)} disabled={busy} onClick={()=>remove(id)}><Trash2 size={20}/></button>
+      </article>)}
+      <button className="button secondary" disabled={busy} onClick={()=>setConfirm(true)}>Очистить корзину</button>
+    </div><form className="summary live-form" onSubmit={submit}>
+      <h2>Оформление заявки</h2><p>Ориентировочная сумма <strong>{money(total)}</strong></p>
+      <label>Имя<input name="name" autoComplete="name" required maxLength={255}/></label>
+      <label>Телефон<input name="phone" type="tel" autoComplete="tel" required maxLength={30}/></label>
+      <label>Организация <small>(необязательно)</small><input name="organization" autoComplete="organization" maxLength={255}/></label>
+      <label>Комментарий <small>(необязательно)</small><textarea name="comment" maxLength={2000}/></label>
+      {invalid && <p role="alert">Проверьте количество упаковок и уберите недоступные товары.</p>}
+      {error && <p role="alert" className="error-text">{error}</p>}
+      <button className="button" disabled={busy||invalid}>{busy ? 'Отправляем…' : 'Отправить заявку'}</button><p>Менеджер уточнит наличие, стоимость и доставку по телефону.</p>
+    </form></div>}
+    <ConfirmDialog open={confirm} onClose={()=>setConfirm(false)} onConfirm={clear}/>
+  </div>;
+}
+
+function Info({path, content}: {path: string; content: Content}) {
+  const page = content.pages[path.slice('/info/'.length)];
+  if (path === '/contacts') return <div className="container info-page"><Breadcrumb name="Контакты"/><h1>Контакты</h1>{content.phone&&<p><a href={phoneHref(content.phone)}>{content.phone}</a></p>}{content.email&&<p><a href={'mailto:'+content.email}>{content.email}</a></p>}{content.address&&<p>{content.address}</p>}<a className="button" href="#/cart">К корзине</a></div>;
+  if (path === '/conditions') return <div className="container info-page"><Breadcrumb name="Условия заказа"/><h1>Условия заказа</h1><p className="long-text">{content.conditions}</p><h2>Доставка</h2><p className="long-text">{content.delivery}</p></div>;
+  if (page) return <div className="container info-page"><Breadcrumb name={page.title}/><h1>{page.title}</h1><p className="long-text">{page.body}</p></div>;
+  return <div className="container"><Empty title="Страница не найдена" text="Откройте каталог, чтобы продолжить."/></div>;
+}
+
+function Site() {
+  const route = useRoute();
+  const [path, search] = route.split('?');
+  const landing = useData<{content: Content; categories: Category[]}>('/shop/home');
+  const {notice} = useCart();
+  const main = useRef<HTMLElement>(null);
+  const initial = useRef(true);
+  const content = landing?.data?.content;
+  useEffect(() => {
+    if (initial.current) initial.current = false; else main.current?.focus({preventScroll:true});
+  }, [route]);
+  useEffect(() => {
+    if (!content) return;
+    document.title = path === '/' ? content.title : `${content.pages[path.slice(6)]?.title ?? 'Оптовый магазин'} — Курортник`;
+    document.querySelector('meta[name="description"]')?.setAttribute('content', content.description);
+  }, [path,content]);
+  return <><a className="skip-link" href="#main" onClick={event=>{event.preventDefault();main.current?.focus();}}>Перейти к содержимому</a>
+    <Header content={content}/><main id="main" ref={main} tabIndex={-1}>
+      {path === '/cart' || path === '/checkout' ? <CartPage/> : path.startsWith('/product/') ? <ProductPage key={path} id={path.split('/')[2]}/> : !landing?.data ? <div className="container info-page"><Feedback error={landing?.error}/></div>
+        : path === '/' ? <Home {...landing.data}/> : path === '/catalog' ? <Catalog key={route} query={new URLSearchParams(search)} categories={landing.data.categories}/> : <Info path={path} content={landing.data.content}/>}
+    </main><Footer content={content}/><div className={`toast ${notice?'toast--visible':''}`} role="status">{notice&&<><Check size={20}/><span>{notice}</span><a href="#/cart">К корзине</a></>}</div></>;
+}
+
+export default function App() {
+  if (location.pathname === '/admin' || location.pathname.startsWith('/admin/')) return <Suspense fallback={<p role="status">Загрузка админки…</p>}><Admin/></Suspense>;
+  return <CartProvider><Site/></CartProvider>;
+}
