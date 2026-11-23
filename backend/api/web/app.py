@@ -1,13 +1,15 @@
-"""Same-origin storefront and versioned web API."""
+"""Storefront and versioned web API with same-origin staff sessions."""
 import asyncio
 from contextlib import asynccontextmanager, suppress
 import html
 import os
 from pathlib import Path
 import re
+from urllib.parse import urlsplit
 
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import select
@@ -21,11 +23,15 @@ from .models import Staff
 SOURCE = Path(__file__).resolve().parents[3] / "storefront"
 DIST = Path(os.getenv("SHOP_DIST_DIR", SOURCE / "dist"))
 API_BODY_LIMIT = 11 * 1024 * 1024
+PAGES_ORIGIN = os.getenv("SHOP_PAGES_ORIGIN", "").rstrip("/")
 
 
 @asynccontextmanager
 async def lifespan(_app):
-    from urllib.parse import urlsplit
+    if PAGES_ORIGIN:
+        pages = urlsplit(PAGES_ORIGIN)
+        if pages.scheme != "https" or not pages.hostname or pages.netloc != pages.hostname or pages.path or pages.query or pages.fragment:
+            raise RuntimeError("SHOP_PAGES_ORIGIN must be a single HTTPS origin")
     origin = urlsplit(security.ORIGIN)
     if origin.username or origin.password or origin.path or origin.query or origin.fragment or not origin.hostname:
         raise RuntimeError("SHOP_ORIGIN must be a single origin")
@@ -79,6 +85,24 @@ class BodyLimit:
 
 
 app.add_middleware(BodyLimit)
+
+
+class PublicCatalogCors(CORSMiddleware):
+    async def __call__(self, scope, receive, send):
+        if scope["type"] == "http" and scope["path"].startswith("/api/v1/shop/"):
+            await super().__call__(scope, receive, send)
+        else:
+            await self.app(scope, receive, send)
+
+
+if PAGES_ORIGIN:
+    app.add_middleware(
+        PublicCatalogCors,
+        allow_origins=[PAGES_ORIGIN],
+        allow_methods=["GET", "POST"],
+        allow_headers=["Content-Type", "Idempotency-Key"],
+        allow_credentials=False,
+    )
 
 
 @app.exception_handler(RequestValidationError)

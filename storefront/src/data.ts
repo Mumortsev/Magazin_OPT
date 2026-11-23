@@ -46,6 +46,13 @@ export const money = (amount: number) =>
 export const canOrder = (product: Product) => product.available === null || product.available >= product.minimum;
 export const packLimit = (product: Product) => Math.min(product.available ?? 100000, 100000);
 export const phoneHref = (phone: string) => 'tel:' + phone.replace(/[^+\d]/g, '');
+export const publicApiOrigin = import.meta.env.VITE_SHOP_API_ORIGIN?.replace(/\/$/, '') ?? '';
+
+export function storefrontImage(src: string): string {
+  if (src === '/images/hero.webp') return import.meta.env.BASE_URL + 'images/hero.webp';
+  return src.startsWith('/') ? publicApiOrigin + src : src;
+}
+
 let csrf = '';
 
 export function setCsrf(value: string) { csrf = value; }
@@ -54,7 +61,19 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
   const headers = new Headers(options.headers);
   if (options.body && !(options.body instanceof FormData)) headers.set('Content-Type', 'application/json');
   if (csrf && options.method && options.method !== 'GET') headers.set('X-CSRF-Token', csrf);
-  const response = await fetch('/api/v1' + path, { ...options, headers });
+  const publicRequest = path.startsWith('/shop/');
+  const base = publicRequest ? publicApiOrigin : '';
+  let response: Response;
+  try {
+    response = await fetch(base + '/api/v1' + path, {
+      ...options,
+      headers,
+      credentials: publicRequest ? 'omit' : 'same-origin',
+    });
+  } catch (error) {
+    if (options.signal?.aborted) throw error;
+    throw new Error('Не удалось связаться с магазином. Проверьте подключение и попробуйте ещё раз.');
+  }
   if (!response.ok) {
     const data = await response.json().catch(() => ({}));
     const detail = data.detail;

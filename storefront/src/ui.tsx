@@ -1,12 +1,12 @@
 import {useEffect,useRef,useState,type ReactNode} from 'react';
 import {ArrowRight,Minus,Plus,ShoppingBag,Check,X,ChevronRight} from 'lucide-react';
-import {money,canOrder,packLimit,type Product} from './data';
+import {money,canOrder,packLimit,storefrontImage,type Product} from './data';
 import {useCart} from './cart';
 export function Photo({src,alt,eager=false}:{src?:string|null;alt:string;eager?:boolean}) {
  const [failed,setFailed]=useState(false);
  useEffect(()=>setFailed(false),[src]);
  return <div className="product-photo">{src&&!failed
-   ? <img src={src} alt={alt} loading={eager?'eager':'lazy'} decoding="async" onError={()=>setFailed(true)}/>
+   ? <img src={storefrontImage(src)} alt={alt} loading={eager?'eager':'lazy'} decoding="async" onError={()=>setFailed(true)}/>
    : <span className="photo-fallback" role="img" aria-label="Фото отсутствует"><ShoppingBag size={36}/></span>}</div>;
 }
 export function Quantity({value,min,max,onChange,label='Количество упаковок'}:{value:number;min:number;max:number;onChange:(n:number)=>void;label?:string}){

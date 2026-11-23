@@ -1,4 +1,4 @@
-name: Publish wholesale demo to Pages
+name: Publish wholesale storefront to Pages
 on:
   push:
     branches: [main]
@@ -16,6 +16,9 @@ jobs:
     defaults:
       run:
         working-directory: storefront
+    env:
+      VITE_SHOP_API_ORIGIN: ${{ vars.SHOP_API_ORIGIN }}
+      PAGES_ORIGIN: https://mumortsev.github.io
     steps:
       - uses: actions/checkout@v5
       - uses: pnpm/action-setup@v4
@@ -27,7 +30,31 @@ jobs:
           cache: pnpm
           cache-dependency-path: storefront/pnpm-lock.yaml
       - run: pnpm install --frozen-lockfile
-      - run: pnpm build
+      - name: Verify public API before replacing Pages
+        run: |
+          node --input-type=module <<'JS'
+          import assert from 'node:assert/strict';
+          const origin = process.env.VITE_SHOP_API_ORIGIN;
+          const pages = process.env.PAGES_ORIGIN;
+          assert(origin, 'Set the repository variable SHOP_API_ORIGIN to the deployed HTTPS API origin.');
+          assert.equal(new URL(origin).origin, origin);
+          assert(origin.startsWith('https://'));
+          const options = {headers: {Origin: pages}, redirect: 'error', signal: AbortSignal.timeout(15000)};
+          const home = await fetch(origin + '/api/v1/shop/home', options);
+          assert(home.ok, 'The catalog API is unavailable, HTTP ' + home.status);
+          assert.equal(home.headers.get('access-control-allow-origin'), pages);
+          const data = await home.json();
+          assert(data.content?.banner_title && Array.isArray(data.categories), 'Unexpected catalog response.');
+          const preflight = await fetch(origin + '/api/v1/shop/orders', {
+            ...options,
+            method: 'OPTIONS',
+            headers: {...options.headers, 'Access-Control-Request-Method': 'POST', 'Access-Control-Request-Headers': 'content-type,idempotency-key'},
+          });
+          assert(preflight.ok, 'The order API preflight was rejected, HTTP ' + preflight.status);
+          assert.equal(preflight.headers.get('access-control-allow-origin'), pages);
+          JS
+      - run: pnpm build --mode github-pages
+      - run: rm -f dist/push-sw.js
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
