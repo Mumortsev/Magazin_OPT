@@ -48,38 +48,40 @@ export default function PromotionCarousel() {
     element?.scrollTo({left: next * element.clientWidth, behavior: reducedMotion || Math.abs(next - index) > 1 ? 'instant' : 'smooth'});
   }
 
-  return <section className="container promotion" aria-label="Подборки магазина" aria-roledescription="карусель"
+  return <section className="promotion-area" aria-label="Подборки магазина" aria-roledescription="карусель"
     onPointerEnter={event => { if (event.pointerType === 'mouse') setHovered(true); }}
     onPointerLeave={() => setHovered(false)}
     onFocus={event => setFocused(event.target !== rotation.current)}
     onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget)) setFocused(false); }}>
-    <h1 className="promotion-heading">Курортные товары оптом</h1>
-    <div className="promotion-track" ref={track} onScroll={event => {
-      const {scrollLeft, clientWidth} = event.currentTarget;
-      if (clientWidth) setIndex(Math.min(collectionKeys.length - 1, Math.max(0, Math.round(scrollLeft / clientWidth))));
-    }}>
-      {collectionKeys.map((key, position) => {
-        const {title, text, action} = collections[key];
-        return <article key={key} className={`promotion-slide promotion-slide--${key}`} aria-hidden={position !== index}>
-          <div className="promotion-copy">
-            <h2>{title}</h2>
-            <p>{text}</p>
-            <a className="button" href={collectionHref(key)} tabIndex={position === index ? undefined : -1}>{action}<ArrowRight size={20}/></a>
-          </div>
-          <img className="promotion-image" src={`${import.meta.env.BASE_URL}images/promotions/${key}.webp`} alt=""
-            fetchPriority={position === 0 ? 'high' : 'auto'} decoding="async" draggable={false}/>
-        </article>;
-      })}
-    </div>
-    <div className="promotion-controls">
-      <button type="button" className="promotion-arrow" onClick={() => select(index - 1)} aria-label="Предыдущий баннер"><ChevronLeft size={22}/></button>
-      <div className="promotion-dots" role="group" aria-label="Выбрать баннер">
-        {collectionKeys.map((key, position) => <button key={key} type="button" onClick={() => select(position)}
-          aria-label={collections[key].title} aria-current={position === index ? 'true' : undefined}><span/></button>)}
+    <div className="container promotion">
+      <h1 className="promotion-heading">Курортные товары оптом</h1>
+      <div className="promotion-track" ref={track} onScroll={event => {
+        const {scrollLeft, clientWidth} = event.currentTarget;
+        if (clientWidth) setIndex(Math.min(collectionKeys.length - 1, Math.max(0, Math.round(scrollLeft / clientWidth))));
+      }}>
+        {collectionKeys.map((key, position) => {
+          const {title, text, action} = collections[key];
+          return <article key={key} className={`promotion-slide promotion-slide--${key}`} aria-hidden={position !== index}>
+            <div className="promotion-copy">
+              <h2>{title}</h2>
+              <p>{text}</p>
+              <a className="button" href={collectionHref(key)} tabIndex={position === index ? undefined : -1}>{action}<ArrowRight size={20}/></a>
+            </div>
+            <img className="promotion-image" src={`${import.meta.env.BASE_URL}images/promotions/${key}.webp`} alt=""
+              fetchPriority={position === 0 ? 'high' : 'auto'} decoding="async" draggable={false}/>
+          </article>;
+        })}
       </div>
-      <button type="button" className="promotion-arrow" onClick={() => select(index + 1)} aria-label="Следующий баннер"><ChevronRight size={22}/></button>
-      {!reducedMotion && <button ref={rotation} type="button" className="promotion-pause" onClick={() => setPaused(value => !value)}
-        aria-label={paused ? 'Включить прокрутку баннеров' : 'Приостановить прокрутку баннеров'}>{paused ? <Play size={17}/> : <Pause size={17}/>}</button>}
+      <div className="promotion-controls">
+        <button type="button" className="promotion-arrow" onClick={() => select(index - 1)} aria-label="Предыдущий баннер"><ChevronLeft size={22}/></button>
+        <div className="promotion-dots" role="group" aria-label="Выбрать баннер">
+          {collectionKeys.map((key, position) => <button key={key} type="button" onClick={() => select(position)}
+            aria-label={collections[key].title} aria-current={position === index ? 'true' : undefined}><span/></button>)}
+        </div>
+        <button type="button" className="promotion-arrow" onClick={() => select(index + 1)} aria-label="Следующий баннер"><ChevronRight size={22}/></button>
+        {!reducedMotion && <button ref={rotation} type="button" className="promotion-pause" onClick={() => setPaused(value => !value)}
+          aria-label={paused ? 'Включить прокрутку баннеров' : 'Приостановить прокрутку баннеров'}>{paused ? <Play size={17}/> : <Pause size={17}/>}</button>}
+      </div>
     </div>
   </section>;
 }

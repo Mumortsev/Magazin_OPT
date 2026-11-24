@@ -14,8 +14,9 @@ export function Photo({src,alt,eager=false}:{src?:string|null;alt:string;eager?:
 function ProductImages({product,collection}: {product:Product;collection?:Collection}) {
   const {id, images, name, badge, isNew} = product;
   const href = `#/product/${id}`;
-  const label = collection ? <span className={`tag collection-tag collection-tag--${collection}`}>{collections[collection].title}</span>
-    : (isNew || badge) && <span className="tag">{badge || 'Новинка'}</span>;
+  const labelClass = product.referenceUrl ? 'tag tag--artwork' : 'tag';
+  const label = collection ? <span className={`${labelClass} collection-tag collection-tag--${collection}`}>{collections[collection].title}</span>
+    : (isNew || badge) && <span className={labelClass}>{badge || 'Новинка'}</span>;
   if (images.length < 2) {
     return <a className="product-card__image" href={href}>
       <Photo src={images[0]} alt={name}/>{label}

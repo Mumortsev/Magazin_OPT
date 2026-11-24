@@ -21,6 +21,7 @@ export interface Product {
   isNew: boolean;
   images: string[];
   badge: string | null;
+  referenceUrl?: string;
 }
 
 export interface Content {

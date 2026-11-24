@@ -2,5 +2,167 @@
   {
     "name": "hero",
     "url": "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1200&q=85"
+  },
+  {
+    "product": "tote",
+    "model": "Decathlon Move 500 · 8940721",
+    "url": "https://www.decathlon.co.uk/p/mesh-tote-bag-move-500-25l/365072/c19m8940721",
+    "photos": [
+      "https://contents.mediadecathlon.com/p3028803/k$752baf3de8d93a34cb80ab9c12c203ee/picture.jpg?format=jpeg&f=900x0",
+      "https://contents.mediadecathlon.com/p3028812/k$9fc86cf520f6d0cbb6f446fd301b0cc4/picture.jpg?format=jpeg&f=900x0"
+    ]
+  },
+  {
+    "product": "hat",
+    "model": "Sunday Afternoons · Havana",
+    "url": "https://www.sundayafternoons.com/products/havana-hat",
+    "photos": [
+      "https://cdn.shopify.com/s/files/1/0506/6774/9566/products/havana-hat-tan-front-ss20-2500px_7920e1df-9840-4fef-b414-824a1f252f60.jpg?width=900",
+      "https://cdn.shopify.com/s/files/1/0506/6774/9566/products/havana-hat-tan-inside-ss20-2500px.jpg?width=900"
+    ]
+  },
+  {
+    "product": "towel",
+    "model": "IKEA BROKGINST · 106.144.47",
+    "url": "https://www.ikea.com/gb/en/p/brokginst-bath-sheet-white-10614447/",
+    "photos": [
+      "https://www.ikea.com/gb/en/images/products/brokginst-bath-sheet-white__1435395_pe983960_s5.jpg",
+      "https://www.ikea.com/gb/en/images/products/brokginst-bath-sheet-white__1476134_pe998741_s5.jpg"
+    ]
+  },
+  {
+    "product": "ring",
+    "model": "Intex Transparent Tube · 59260EP",
+    "url": "https://intexcorp.com/products/floats-toys/pool-toys/30in-transparent-tubes/",
+    "photos": [
+      "https://cdn11.bigcommerce.com/s-u7yn5f7nmq/images/stencil/1280w/products/2692/33777/59260_ST_20250116_A5A1000_V1_R2-4798x3200-4b0dfd5__71764.1784936498.png?c=2",
+      "https://cdn11.bigcommerce.com/s-u7yn5f7nmq/images/stencil/1280w/products/2692/33781/59260_ST_20250116_A5A0935_V1_R2-4798x3200-4b0dfd5__32462.1784936499.png?c=2"
+    ]
+  },
+  {
+    "product": "mask",
+    "model": "Intex Reef Rider · 55648",
+    "url": "https://intexcompany.lt/en/products/wetset/aquaflow-swim-gear/reef-rider-swim-set/pn-2998/",
+    "photos": [
+      "https://cdn11.bigcommerce.com/s-u7yn5f7nmq/images/stencil/1280w/products/2773/14415/55648_A02_MH_ST__79791.1691192022.jpg?c=2",
+      "https://cdn11.bigcommerce.com/s-u7yn5f7nmq/images/stencil/1280w/products/2773/14418/55648_A02b_MH_ST__99654.1691192022.jpg?c=2"
+    ]
+  },
+  {
+    "product": "slides",
+    "model": "Speedo Entry Essential · 8951316",
+    "url": "https://www.decathlon.co.uk/p/mens-pool-slides-entry-essential-blue/369085/c5m8951316",
+    "photos": [
+      "https://contents.mediadecathlon.com/p2831261/k$d167ada2e7c7983a7157c19053b76f09/picture.jpg?format=jpeg&f=900x0",
+      "https://contents.mediadecathlon.com/p2831262/k$7e3a54df41e4d10e52f5e4433c0fdec9/picture.jpg?format=jpeg&f=900x0"
+    ]
+  },
+  {
+    "product": "umbrella",
+    "model": "IKEA KNALLA · 304.776.37",
+    "url": "https://www.ikea.com/us/en/p/knalla-umbrella-foldable-black-30477637/",
+    "photos": [
+      "https://www.ikea.com/us/en/images/products/knalla-umbrella-foldable-black__0920159_pe786876_s5.jpg",
+      "https://www.ikea.com/us/en/images/products/knalla-umbrella-foldable-black__0367470_pe549530_s5.jpg"
+    ]
+  },
+  {
+    "product": "bucket",
+    "model": "IKEA SANDIG · 005.776.76",
+    "url": "https://www.ikea.com/lt/en/p/sandig-7-piece-sand-play-set-multicolour-00577676/",
+    "photos": [
+      "https://www.ikea.com/lt/en/images/products/sandig-7-piece-sand-play-set-multicolour__1234300_pe917123_s5.jpg",
+      "https://www.ikea.com/lt/en/images/products/sandig-7-piece-sand-play-set-multicolour__1234299_pe917124_s5.jpg"
+    ]
+  },
+  {
+    "product": "mug",
+    "model": "IKEA GLADELIG · 805.814.91",
+    "url": "https://www.ikea.com/gb/en/p/gladelig-mug-blue-80581491/",
+    "photos": [
+      "https://www.ikea.com/gb/en/images/products/gladelig-mug-blue__1343658_pe949617_s5.jpg",
+      "https://www.ikea.com/gb/en/images/products/gladelig-mug-blue__1439694_pe985417_s5.jpg"
+    ]
+  },
+  {
+    "product": "tote-large",
+    "model": "Regatta Boulder Beach Bag",
+    "url": "https://www.decathlon.co.uk/p/mp/boulder-beach-bag/45e896b8-1843-4668-9613-3647c78b8054/c255",
+    "photos": [
+      "https://contents.mediadecathlon.com/m37292980/k$afbc855805565fd91c027008680177a9/picture.jpg?format=jpeg&f=900x0",
+      "https://contents.mediadecathlon.com/m37292966/k$fc03dca9df8f5137d2019006b7865cfb/picture.jpg?format=jpeg&f=900x0"
+    ]
+  },
+  {
+    "product": "hat-natural",
+    "model": "Sunday Afternoons · Kauai",
+    "url": "https://www.sundayafternoons.com/products/kauai-hat",
+    "photos": [
+      "https://cdn.shopify.com/s/files/1/0506/6774/9566/products/kauai-hat-natural-front-ss20-2500px_f2542719-1a9b-4286-88dc-b43e0689d578.jpg?width=900",
+      "https://cdn.shopify.com/s/files/1/0506/6774/9566/products/kauai-hat-natural-inside-ss20-2500px.jpg?width=900"
+    ]
+  },
+  {
+    "product": "towel-set",
+    "model": "IKEA SLÅNHÖSTMAL · 205.760.39",
+    "url": "https://www.ikea.com/gb/en/p/slanhoestmal-bath-sheet-bright-blue-light-blue-striped-20576039/",
+    "photos": [
+      "https://www.ikea.com/gb/en/images/products/slanhoestmal-bath-sheet-bright-blue-light-blue-striped__1255907_pe924780_s5.jpg",
+      "https://www.ikea.com/gb/en/images/products/slanhoestmal-bath-sheet-bright-blue-light-blue-striped__1255906_pe924779_s5.jpg"
+    ]
+  },
+  {
+    "product": "ring-small",
+    "model": "Intex Under the Sea · 56205EP",
+    "url": "https://intexcorp.com/products/floats-toys/pool-toys/under-the-sea-swim-ring/",
+    "photos": [
+      "https://cdn11.bigcommerce.com/s-u7yn5f7nmq/images/stencil/1280w/products/4311/16129/56205_A01_MH_ST__93322.1697132342.jpg?c=2",
+      "https://cdn11.bigcommerce.com/s-u7yn5f7nmq/images/stencil/1280w/products/4311/16131/56205_D02_LS__98059.1697132057.jpg?c=2"
+    ]
+  },
+  {
+    "product": "mask-set",
+    "model": "Intex Wave Rider · 55647E",
+    "url": "https://intexcorp.com/products/floats-toys/aquaflow-swim-gear/sport-series/wave-rider-swim-set/",
+    "photos": [
+      "https://cdn11.bigcommerce.com/s-u7yn5f7nmq/images/stencil/1280w/products/2772/14413/55647_A02_MH_ST__81195.1691191803.jpg?c=2",
+      "https://cdn11.bigcommerce.com/s-u7yn5f7nmq/images/stencil/1280w/products/2772/14414/55647_A02b_MH_ST__78404.1691191803.jpg?c=2"
+    ]
+  },
+  {
+    "product": "slides-light",
+    "model": "Nabaiji SLAP 500 · 8797336",
+    "url": "https://www.decathlon.co.uk/p/slap-500-m-new-blue-white/340191/c364c289c227m8797336",
+    "photos": [
+      "https://contents.mediadecathlon.com/p2408743/k$645bf4609c1954b59ce4b4382846d277/picture.jpg?format=jpeg&f=900x0",
+      "https://contents.mediadecathlon.com/p2408744/k$4e92133e3764f8726a805ce13cfd7d58/picture.jpg?format=jpeg&f=900x0"
+    ]
+  },
+  {
+    "product": "bucket-mini",
+    "model": "Hape Beach Basics",
+    "url": "https://toys.hape.com/products/beach-basics",
+    "photos": [
+      "https://cdn.shopify.com/s/files/1/0560/6188/6521/files/Hape-Beach-Basics-Hape-Toy-Market-44308518.jpg?width=900",
+      "https://cdn.shopify.com/s/files/1/0560/6188/6521/files/Hape-Beach-Basics-Hape-Toy-Market-44308684.jpg?width=900"
+    ]
+  },
+  {
+    "product": "mug-sea",
+    "model": "IKEA GLADELIG · 405.036.26",
+    "url": "https://www.ikea.com/gb/en/p/gladelig-mug-blue-40503626/",
+    "photos": [
+      "https://www.ikea.com/gb/en/images/products/gladelig-mug-blue__0986803_pe817327_s5.jpg",
+      "https://www.ikea.com/gb/en/images/products/gladelig-mug-blue__1439695_pe985418_s5.jpg"
+    ]
+  },
+  {
+    "product": "umbrella-light",
+    "model": "IKEA SPJUTSÖ · 006.413.71",
+    "url": "https://www.ikea.com/de/en/p/spjutsoe-umbrella-foldable-multicolour-patterned-00641371/",
+    "photos": [
+      "https://www.ikea.com/de/en/images/products/spjutsoe-umbrella-foldable-multicolour-patterned__1514716_pe1011083_s5.jpg",
+      "https://www.ikea.com/de/en/images/products/spjutsoe-umbrella-foldable-multicolour-patterned__1514714_pe1011085_s5.jpg"
+    ]
   }
 ]

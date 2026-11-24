@@ -31,10 +31,10 @@ function useRoute() {
   return route;
 }
 
-function Header({content, showSearch}: {content?: Content; showSearch: boolean}) {
+function Header({content, showSearch, home}: {content?: Content; showSearch: boolean; home: boolean}) {
   const {lines} = useCart();
   const [search, setSearch] = useState('');
-  return <header className="header"><div className={`header-inner live-header${showSearch ? '' : ' live-header--without-search'}`}>
+  return <header className={`header${home?' header--home':''}`}><div className={`header-inner live-header${showSearch ? '' : ' live-header--without-search'}`}>
     <a href="#/" className="brand">курортник<span className="brand-dot">.</span><small>ОПТОВЫЙ МАГАЗИН</small></a>
     {showSearch&&<form className="search-field" onSubmit={event => {
       event.preventDefault();
@@ -48,7 +48,11 @@ function Header({content, showSearch}: {content?: Content; showSearch: boolean})
       {content?.phone && <a className="header-phone" href={phoneHref(content.phone)} aria-label={'Позвонить ' + content.phone}><Phone size={20}/></a>}
       <a className="cart-link" href="#/cart"><ShoppingBag size={20}/><span>Корзина</span><b aria-label={`${lines.reduce((sum, line) => sum + line.packs, 0)} упаковок`}>{lines.reduce((sum, line) => sum + line.packs, 0)}</b></a>
     </div>
-  </div></header>;
+  </div>{home && demoMode && <DemoNote/>}</header>;
+}
+
+function DemoNote() {
+  return <div className="demo-banner">Демо-витрина. Цены и фасовка тестовые, заявки сохраняются в этом браузере.</div>;
 }
 
 function Footer({content}: {content?: Content}) {
@@ -74,8 +78,7 @@ function CategoryTile({name, image, href}: {name: string; image: string | null; 
 function Home({content, categories}: {content: Content; categories: Category[]}) {
   const groups = useData<{featured: Product[]; offers: Product[]; newest: Product[]}>('/shop/highlights');
   return <>
-    <PromotionCarousel/>
-    <section className="container section"><h2>Категории товаров</h2><div className="categories">
+    <section className="container section home-categories"><h2>Категории товаров</h2><div className="categories">
       {categories.map(category => <CategoryTile key={category.id} name={category.name} image={category.image} href={`#/catalog?category=${category.id}`}/>)}
     </div></section>
     {groups?.data ? ([['hits', groups.data.featured], ['new', groups.data.newest], ['sale', groups.data.offers]] as const)
@@ -165,7 +168,9 @@ function ProductDetails({product}: {product: Product}) {
   const [photo, setPhoto] = useState(0);
   return <><Breadcrumb name={product.name} parent="Каталог"/><div className="product-detail">
     <div><Photo src={product.images[photo]} alt={product.name} eager/>{product.images.length > 1 && <div className="gallery-thumbs">{product.images.map((src,index)=><button key={src} onClick={()=>setPhoto(index)} aria-label={`Фотография ${index+1}`} aria-pressed={photo===index}><Photo src={src} alt=""/></button>)}</div>}</div>
-    <div><h1>{product.name}</h1>{product.country && <p>Страна: {product.country}</p>}<ProductCard p={product} detail/></div>
+    <div><h1>{product.name}</h1>{product.country && <p>Страна: {product.country}</p>}<ProductCard p={product} detail/>
+      {product.referenceUrl && <a href={product.referenceUrl} className="underline-link" target="_blank" rel="noreferrer">Описание модели в источнике</a>}
+    </div>
   </div></>;
 }
 
@@ -243,6 +248,7 @@ function Info({path, content}: {path: string; content: Content}) {
 function Site() {
   const route = useRoute();
   const [path, search] = route.split('?');
+  const home = path === '/';
   const query = new URLSearchParams(search);
   const landing = useData<{content: Content; categories: Category[]}>('/shop/home');
   const {notice} = useCart();
@@ -257,8 +263,9 @@ function Site() {
     document.title = path === '/' ? content.title : `${content.pages[path.slice(6)]?.title ?? 'Оптовый магазин'} — Курортник`;
     document.querySelector('meta[name="description"]')?.setAttribute('content', content.description);
   }, [path,content]);
-  return <>{demoMode&&<div className="demo-banner">Демонстрация магазина. Тестовые товары и заявки сохраняются только в этом браузере.</div>}<a className="skip-link" href="#main" onClick={event=>{event.preventDefault();main.current?.focus();}}>Перейти к содержимому</a>
-    <Header content={content} showSearch={path !== '/catalog' || !showsCatalogProducts(query)}/><main id="main" ref={main} tabIndex={-1}>
+  return <><a className="skip-link" href="#main" onClick={event=>{event.preventDefault();main.current?.focus();}}>Перейти к содержимому</a>
+    {home ? <PromotionCarousel/> : demoMode && <DemoNote/>}
+    <Header content={content} home={home} showSearch={path !== '/catalog' || !showsCatalogProducts(query)}/><main id="main" ref={main} tabIndex={-1}>
       {path === '/cart' || path === '/checkout' ? <CartPage/> : path.startsWith('/product/') ? <ProductPage key={path} id={path.split('/')[2]}/> : !landing?.data ? <div className="container info-page"><Feedback error={landing?.error}/></div>
         : path === '/' ? <Home {...landing.data}/> : path === '/catalog' ? <Catalog key={route} query={query} categories={landing.data.categories}/> : <Info path={path} content={landing.data.content}/>}
     </main><Footer content={content}/><div className={`toast ${notice?'toast--visible':''}`} role="status">{notice&&<><Check size={20}/><span>{notice}</span><a href="#/cart">К корзине</a></>}</div></>;

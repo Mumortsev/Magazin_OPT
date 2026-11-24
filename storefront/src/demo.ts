@@ -1,5 +1,6 @@
 import type {Category, Content} from './data';
 import {products, sections} from './demo-catalog';
+import {demoModels} from './demo-models';
 import {isCollection, type Collection} from './collections';
 
 type Group = {id:number; parent_id:number|null; name:string; order:number; active:boolean; image:string|null};
@@ -24,14 +25,20 @@ const picture = (name:number|string) => import.meta.env.BASE_URL + 'images/demo/
 const galleryDemoIds = new Set([1,2,3,4,8]);
 const collectionFields = {sale:'offer_ids', hits:'featured_ids'} as const;
 const collectionLimit = 24;
+const galleryVersion = 3;
 const collectionPhotos = new Map([[5,'swim-mask'],[7,'compact-umbrella'],[16,'mini-bucket']]);
-function starterImages(id:number, cell:number, version=2) {
+function legacyImages(id:number, cell:number, version:number) {
   const photo = picture(cell);
   if (version===0) return [photo];
   const collectionPhoto = version>=2 ? collectionPhotos.get(id) : undefined;
   if (collectionPhoto) return [picture(collectionPhoto)];
   if (id===4 && version>=2) return [photo,picture('swim-ring')];
   return galleryDemoIds.has(id) ? [photo,photo+'#detail'] : [photo];
+}
+
+function modelImages(key:string) {
+  const base = import.meta.env.BASE_URL + `images/catalog/${key}`;
+  return [`${base}-info.webp`,`${base}-view.webp`];
 }
 const timestamp = () => new Date().toISOString();
 const nextId = (items:{id:number}[]) => Math.max(0,...items.map(item=>Math.abs(item.id))) + 1;
@@ -62,9 +69,10 @@ function initial():State {
       group={id:-nextId(groups),parent_id:parent,name:product.category,order:index,active:true,image:picture(product.photo)};
       groups.push(group);
     }
-    return {id:index+1,name:product.name,description:product.description,sku:product.sku,country:null,badge_text:null,badge_bg_color:null,
+    const model = demoModels[product.id];
+    return {id:index+1,name:model.name,description:model.description,sku:product.sku,country:null,badge_text:null,badge_bg_color:null,
       price_per_unit:product.price,pieces_per_pack:product.pack,min_order_packs:product.minimum,in_stock:product.available,
-      category_id:parent,subcategory_id:-group.id,active:true,is_new:!!product.isNew,images:starterImages(index+1,product.photo),updated_at:timestamp()};
+      category_id:parent,subcategory_id:-group.id,active:true,is_new:!!product.isNew,images:modelImages(product.id),updated_at:timestamp()};
   });
   const content:Content = {
     title:'Курортник — витрина для оптовых покупателей',
@@ -80,7 +88,7 @@ function initial():State {
     orderFrom(items,101,[{product_id:1,quantity_packs:2},{product_id:3,quantity_packs:3}]),
     orderFrom(items,102,[{product_id:8,quantity_packs:2},{product_id:2,quantity_packs:1}],'processing'),
     orderFrom(items,103,[{product_id:9,quantity_packs:2}],'completed'),
-  ],keys:{},galleryVersion:2};
+  ],keys:{},galleryVersion};
 }
 
 function load():State {
@@ -89,14 +97,18 @@ function load():State {
     if (!stored) return initial();
     const state = JSON.parse(stored) as State;
     const version = state.galleryVersion??0;
-    if (version<2) {
+    if (version<galleryVersion) {
       for (const item of state.products) {
         const seed = products[item.id-1];
-        if (!seed || item.sku!==seed.sku) continue;
-        const previous = starterImages(item.id,seed.photo,version);
-        if (item.images.length===previous.length && item.images.every((image,index)=>image===previous[index])) item.images=starterImages(item.id,seed.photo);
+        if (!seed || item.sku!==seed.sku || item.name!==seed.name || item.description!==seed.description) continue;
+        const previous = legacyImages(item.id,seed.photo,version);
+        if (item.images.length!==previous.length || !item.images.every((image,index)=>image===previous[index])) continue;
+        const model = demoModels[seed.id];
+        item.name = model.name;
+        item.description = model.description;
+        item.images = modelImages(seed.id);
       }
-      state.galleryVersion=2;
+      state.galleryVersion=galleryVersion;
     }
     return state;
   } catch { return initial(); }
@@ -108,10 +120,13 @@ function save(state:State) {
 }
 
 function catalogProduct(product:Item, groups:Group[]) {
+  const seed = products[product.id-1];
+  const model = seed && product.sku===seed.sku ? demoModels[seed.id] : undefined;
+  const referenceUrl = model && product.description===model.description && product.images.includes(modelImages(seed.id)[0]) ? model.source : undefined;
   return {
     ...product, category:groups.find(item=>item.id===product.category_id)?.name??'',
     price:product.price_per_unit, pack:product.pieces_per_pack, minimum:product.min_order_packs,
-    available:product.in_stock, isNew:product.is_new, badge:product.badge_text,
+    available:product.in_stock, isNew:product.is_new, badge:product.badge_text, referenceUrl,
   };
 }
 
