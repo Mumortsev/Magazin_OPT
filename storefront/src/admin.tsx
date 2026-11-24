@@ -1,6 +1,7 @@
 import {useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode} from 'react';
-import {BarChart3, Bell, ClipboardList, FileSpreadsheet, FolderTree, LayoutTemplate, LogOut, Package, Phone} from 'lucide-react';
+import {BarChart3, Bell, ClipboardList, Ellipsis, Eye, EyeOff, FileSpreadsheet, FolderTree, LayoutTemplate, LogOut, Package, Pencil, Phone, Plus, ShoppingBag, Trash2} from 'lucide-react';
 import {adminRoot, api, demoMode, money, phoneHref, setCsrf, type Content} from './data';
+import {Photo} from './ui';
 import './admin.css';
 
 type Staff = {id:number; name:string; role:'admin'|'manager'; csrf:string};
@@ -106,8 +107,12 @@ function Orders({staff,revision,refresh}:{staff:Staff;revision:number;refresh:()
   if(id)return <OrderDetail key={id} id={id} staff={staff} revision={revision} refresh={refresh} close={()=>select(null)}/>;
   return <><h1>Заявки</h1><label className="admin-inline">Статус<select value={filter} onChange={event=>{setFilter(event.target.value);setPage(1);}}><option value="">Все</option>{Object.entries(statuses).filter(([key])=>key!=='rejected').map(([key,value])=><option key={key} value={key}>{value}</option>)}</select></label>
     {result.error ? <p role="alert">{result.error}</p> : !result.data ? <p role="status">Загрузка…</p> : <div className="admin-cards">{result.data.items.length===0&&<p>Заявок нет.</p>}{result.data.items.map(order=><button key={order.id} className="admin-order" onClick={()=>select(order.id)}>
-      <strong>№{order.id} · {statuses[order.status]??order.status}</strong><span>{date(order.created_at)}</span><span>{order.name} · {order.phone}</span>
-      <span>{order.items.slice(0,2).map(item=>`${item.name} × ${item.packs} уп.`).join(', ')}</span><span>{money(order.total)} · {order.manager??'Свободна'}</span>
+      <span className="admin-order-header"><strong>Заявка №{order.id}</strong><span className={`admin-badge${order.status==='new'?' admin-badge--active':''}`}>{statuses[order.status]??order.status}</span></span>
+      <span className="admin-order-product">
+        {order.items[0]?.photo&&<img className="admin-order-thumbnail" src={order.items[0].photo} alt="" loading="lazy"/>}
+        <span><strong>{order.name}</strong><span>{order.items.slice(0,2).map(item=>`${item.name} × ${item.packs} уп.`).join(', ')}</span></span>
+      </span>
+      <span className="admin-order-footer"><strong>{money(order.total)}</strong><span>Открыть заявку</span></span>
     </button>)}</div>}
     <Pager page={page} total={result.data?.total??0} setPage={setPage}/>
   </>;
@@ -167,23 +172,66 @@ function CatalogAdmin({categories=false,onProducts}:{categories?:boolean;onProdu
     void action.run(async()=>{await write((categories?'/categories':'/products')+'/'+id,'DELETE');refresh(n=>n+1);});
   }
   const items=categories?tree.data:products.data?.items;
-  return <><h1>{categories?'Категории':'Товары'}</h1><div className="actions"><button className="button" onClick={()=>change('new')}>{categories?'Добавить категорию':'Добавить товар'}</button></div>
-    {action.feedback}{(categories?tree.error:products.error)&&<p role="alert">{categories?tree.error:products.error}</p>}
-    {edit ? <div className="admin-panel"><h2>{edit==='new'?'Создание':'Редактирование'}</h2>{categories
-      ? <CategoryEditor key={edit==='new'?'new':edit.id} category={edit==='new'?undefined:edit as Category} tree={tree.data??[]} save={save} mark={editor.mark} busy={action.busy} close={()=>change(null)}/>
-      : <ProductEditor key={edit==='new'?'new':edit.id} product={edit==='new'?undefined:edit as Product} tree={tree.data??[]} defaultCategory={Number(category)>0?Number(category):tree.data?.find(item=>item.id===Number(category))?.parent_id??undefined} defaultSubcategory={Number(category)<0?-Number(category):undefined} save={save} mark={editor.mark} busy={action.busy} close={()=>change(null)}/>}</div> : <>
-      {!categories&&<><div className="admin-inline"><Field value={search} label="Название или артикул" onChange={event=>{setSearch(event.target.value);setPage(1);}}/>
-        <label>Фильтр<select value={filter} onChange={event=>{setFilter(event.target.value);setPage(1);}}><option value="">Все</option><option value="new">Новинки</option><option value="hidden">Скрытые</option><option value="out">Нет в наличии</option></select></label>
-        <label>Категория<select value={category} onChange={event=>{setCategory(event.target.value);setPage(1);}}><option value="">Все</option>{tree.data?.map(item=><option key={item.id} value={item.id}>{item.parent_id?"— ":""}{item.name}</option>)}</select></label>
-      </div>{selected.length>0&&<div className="actions"><span>Выбрано: {selected.length}</span>{[true,false].map(active=><button key={String(active)} className="button secondary" disabled={action.busy} onClick={()=>void action.run(async()=>{await write('/products/bulk','PATCH',{ids:selected,active});setSelected([]);refresh(n=>n+1);})}>{active?'Показать':'Скрыть'}</button>)}</div>}</>}
-      <div className="admin-table" role="table" aria-label={categories?'Категории':'Товары'}>
-        {items?.map(item=><div key={item.id} role="row" className="admin-row">
-          <div role="cell" className="admin-row-name">{'sku' in item ? <label><input type="checkbox" checked={selected.includes(item.id)} onChange={event=>setSelected(previous=>event.target.checked?[...previous,item.id]:previous.filter(id=>id!==item.id))}/>{item.name}</label> : <strong>{item.parent_id ? tree.data?.find(parent=>!parent.parent_id&&parent.id===item.parent_id)?.name+' / ' : null}{item.name}</strong>}</div>
-          <div role="cell">{'sku' in item ? <>№{item.id} · {item.sku||'Без артикула'} · {money(item.price_per_unit)} за шт. · {item.in_stock??'Без учёта'} уп.</> : `Порядок ${item.order}`} · {item.active?'Виден':'Скрыт'}</div>
-          <div role="cell" className="actions">{'parent_id' in item&&<button onClick={()=>onProducts(item.id)}>Товары</button>}{'sku' in item&&<button onClick={()=>void action.run(async()=>{await write('/products/bulk','PATCH',{ids:[item.id],active:!item.active});refresh(n=>n+1);})}>{item.active?'Скрыть':'Показать'}</button>}
-            <button onClick={()=>change(item)}>Редактировать</button>{item.name.toLowerCase()!=='новинки'&&<button onClick={()=>remove(item.id)}>Удалить</button>}</div>
-        </div>)}
+  const listError=categories?tree.error:products.error;
+  const selectedCategory=tree.data?.find(item=>item.id===Number(category));
+  function toggleVisibility(item:Product) {
+    void action.run(async()=>{
+      await write('/products/bulk','PATCH',{ids:[item.id],active:!item.active});
+      refresh(n=>n+1);
+    });
+  }
+  return <>
+    <div className="admin-section-heading">
+      <div>
+        {selectedCategory&&!categories&&<button className="button secondary admin-back" onClick={()=>{setCategory('');setPage(1);}}>Все товары</button>}
+        <h1>{categories?'Категории':selectedCategory?.name??'Товары'}</h1>
       </div>
+      {!edit&&<button className="button" onClick={()=>change('new')}><Plus size={19}/>{categories?'Добавить категорию':'Добавить товар'}</button>}
+    </div>
+    {action.feedback}{listError&&<p role="alert" className="error-text">{listError}</p>}
+    {edit ? <div className="admin-panel"><h2>{edit==='new'?(categories?'Новая категория':'Новый товар'):edit.name}</h2>{categories
+      ? <CategoryEditor key={edit==='new'?'new':edit.id} category={edit==='new'?undefined:edit as Category} tree={tree.data??[]} save={save} mark={editor.mark} busy={action.busy} close={()=>change(null)}/>
+      : <ProductEditor key={edit==='new'?'new':edit.id} product={edit==='new'?undefined:edit as Product} tree={tree.data??[]} defaultCategory={Number(category)>0?Number(category):selectedCategory?.parent_id??undefined} defaultSubcategory={Number(category)<0?-Number(category):undefined} save={save} mark={editor.mark} busy={action.busy} close={()=>change(null)}/>}</div> : <>
+      {!categories&&<>
+        <div className="admin-catalog-filters">
+          <Field type="search" value={search} label="Поиск товара" placeholder="Название или артикул" onChange={event=>{setSearch(event.target.value);setPage(1);}}/>
+          <label>Категория<select value={category} onChange={event=>{setCategory(event.target.value);setPage(1);}}><option value="">Все категории</option>{tree.data?.map(item=><option key={item.id} value={item.id}>{item.parent_id?"— ":""}{item.name}</option>)}</select></label>
+          <label>Отображение<select value={filter} onChange={event=>{setFilter(event.target.value);setPage(1);}}><option value="">Все товары</option><option value="new">Новинки</option><option value="hidden">Скрытые</option><option value="out">Нет в наличии</option></select></label>
+        </div>
+        {selected.length>0&&<div className="actions admin-bulk"><span>Выбрано: {selected.length}</span>{[true,false].map(active=><button key={String(active)} className="button secondary" disabled={action.busy} onClick={()=>void action.run(async()=>{await write('/products/bulk','PATCH',{ids:selected,active});setSelected([]);refresh(n=>n+1);})}>{active?'Показать выбранные':'Скрыть выбранные'}</button>)}</div>}
+      </>}
+      {!items&&!listError&&<p role="status">Загрузка…</p>}
+      {items?.length===0&&<p className="admin-panel">{categories?'Категорий пока нет.':'Товары не найдены.'}</p>}
+      <ul className="admin-catalog-list" aria-label={categories?'Список категорий':'Список товаров'}>
+        {items?.map(item=>{
+          const product='sku' in item ? item : null;
+          const group='parent_id' in item ? item : null;
+          const parent=group?.parent_id ? tree.data?.find(candidate=>candidate.id===group.parent_id)?.name : null;
+          return <li key={item.id} className="admin-row">
+            <div className="admin-row-photo"><Photo src={product?.images[0]??group?.image} alt={item.name}/></div>
+            <div className="admin-row-identity">
+              {parent&&<span className="admin-row-muted">{parent}</span>}
+              <h2>{item.name}</h2>
+              {product&&<span className="admin-row-muted">{product.sku || 'Без артикула'} · №{product.id}</span>}
+              <span className={`admin-badge${item.active?' admin-badge--active':''}`}>{item.active?'В каталоге':'Скрыт'}</span>
+            </div>
+            <div className="admin-row-facts">
+              {product ? <><strong>{money(product.price_per_unit)} <small>за шт.</small></strong><span>{product.in_stock===0?'Нет в наличии':product.in_stock===null?'Остаток не учитывается':`Остаток: ${product.in_stock} уп.`}</span></> : <span>Порядок: {group?.order}</span>}
+            </div>
+            <div className="admin-row-actions">
+              {group&&<button className="button" onClick={()=>onProducts(item.id)}><Package size={17}/> Открыть товары</button>}
+              <button className={group?'button secondary':'button'} onClick={()=>change(item)}><Pencil size={16}/> Редактировать</button>
+              {product&&<button className="button secondary" disabled={action.busy} onClick={()=>toggleVisibility(product)}>{item.active?<EyeOff size={16}/>:<Eye size={16}/>} {item.active?'Скрыть':'Показать'}</button>}
+              {item.name.toLowerCase()!=='новинки'&&<details className="admin-row-menu">
+                <summary aria-label={`Другие действия: ${item.name}`}><Ellipsis size={20}/></summary>
+                <button type="button" onClick={event=>{event.currentTarget.closest('details')?.removeAttribute('open');remove(item.id);}}><Trash2 size={16}/> Удалить</button>
+              </details>}
+            </div>
+            {product&&<input className="admin-row-select" type="checkbox" aria-label={`Выбрать товар «${item.name}»`} checked={selected.includes(item.id)}
+              onChange={event=>setSelected(previous=>event.target.checked?[...previous,item.id]:previous.filter(id=>id!==item.id))}/>}
+          </li>;
+        })}
+      </ul>
       {!categories&&<Pager page={page} total={products.data?.total??0} setPage={setPage}/>}
     </>}
   </>;
@@ -239,7 +287,7 @@ function ProductEditor({product,tree,defaultCategory,defaultSubcategory,save,mar
     <label className="admin-check"><input name="active" type="checkbox" defaultChecked={product?.active??true}/> Показывать в каталоге</label>
     <label className="admin-check"><input name="is_new" type="checkbox" defaultChecked={product?.is_new??false}/> Новинка</label>
     <UploadImage onImage={add} multiple/><div className="admin-inline"><Field label="Адрес фотографии" value={url} onChange={event=>setUrl(event.target.value)}/><button type="button" disabled={!url} onClick={()=>{add(url.trim());setUrl('');}}>Добавить по адресу</button></div>
-    <div className="admin-images">{images.map((src,index)=><div key={src}><img src={src} alt={`Фото ${index+1}`}/>{index===0 ? <span>Главное</span> : <button type="button" onClick={()=>{setImages(previous=>[src,...previous.filter(image=>image!==src)]);mark();}}>Сделать главным</button>}<button type="button" onClick={()=>{setImages(previous=>previous.filter(image=>image!==src));mark();}}>Убрать</button></div>)}</div>
+    <div className="admin-images">{images.map((src,index)=><div key={src}><div className="admin-row-photo"><Photo src={src} alt={`Фото ${index+1}`}/></div>{index===0 ? <span>Главное</span> : <button type="button" onClick={()=>{setImages(previous=>[src,...previous.filter(image=>image!==src)]);mark();}}>Сделать главным</button>}<button type="button" onClick={()=>{setImages(previous=>previous.filter(image=>image!==src));mark();}}>Убрать</button></div>)}</div>
     <EditorButtons busy={busy} close={close}/>
   </form>;
 }
@@ -389,9 +437,11 @@ export default function Admin() {
     analytics:<Analytics revision={revision}/>,import:demoMode?<DemoImport/>:<Import/>,content:<ContentAdmin/>,
     notifications:demoMode?<><h1>Уведомления</h1><p>Сводка заявок обновляется в этом браузере. Web Push и почта доступны после подключения сервера.</p></>:<Notifications staff={staff}/>,
   };
-  return <div className="admin-shell"><aside className="admin-sidebar"><a href={import.meta.env.BASE_URL} className="admin-brand">Курортник</a><p>{staff.name}</p>
+  return <div className="admin-shell"><aside className="admin-sidebar">
+    <div className="admin-sidebar-heading"><div><span className="admin-brand">Курортник</span><span className="admin-sidebar-caption">Управление магазином</span></div>
+    <a className="admin-store-link" href={import.meta.env.BASE_URL}><ShoppingBag size={17}/> Магазин</a></div>
     <nav aria-label="Разделы админки">{available.map(([key,label,Icon])=><button key={key} aria-current={screen===key?'page':undefined} onClick={()=>navigate(key)}><Icon size={20}/>{label}{key==='orders'&&count>0&&<strong>{count}</strong>}</button>)}</nav>
     <button className="button secondary" disabled={action.busy} onClick={()=>{if(window.dispatchEvent(new Event('kurortnik:leave-editor',{cancelable:true})))void action.run(async()=>{await write('/logout','POST');setCsrf('');setStaff(null);});}}><LogOut size={18}/> Выйти</button>
-    {action.feedback}<p role="status">{demoMode?'Демонстрация · данные в этом браузере':online?'Связь с сервером':'Подключение к обновлениям…'}</p>
+    {action.feedback}<p className="admin-sidebar-caption" role="status">{demoMode?'Демонстрация · данные в этом браузере':online?'Связь с сервером':'Подключение к обновлениям…'}</p>
   </aside><main className="admin-main">{panels[screen]}</main></div>;
 }

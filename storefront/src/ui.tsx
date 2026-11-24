@@ -1,14 +1,99 @@
-import {useEffect,useRef,useState,type ReactNode} from 'react';
-import {ArrowRight,Minus,Plus,ShoppingBag,Check,X,ChevronRight} from 'lucide-react';
-import {money,canOrder,packLimit,storefrontImage,type Product} from './data';
+import {useEffect,useRef,useState,type FocusEvent,type ReactNode} from 'react';
+import {ArrowRight,Minus,Plus,ShoppingBag,Check,X,ChevronRight,Pause,Play} from 'lucide-react';
+import {money,canOrder,demoMode,packLimit,storefrontImage,type Product} from './data';
 import {useCart} from './cart';
 export function Photo({src,alt,eager=false}:{src?:string|null;alt:string;eager?:boolean}) {
+ const detail = demoMode && src?.endsWith('#detail');
  const [failed,setFailed]=useState(false);
  useEffect(()=>setFailed(false),[src]);
- return <div className="product-photo">{src&&!failed
+ return <div className={detail ? "product-photo product-photo--detail" : "product-photo"}>{src&&!failed
    ? <img src={storefrontImage(src)} alt={alt} loading={eager?'eager':'lazy'} decoding="async" onError={()=>setFailed(true)}/>
    : <span className="photo-fallback" role="img" aria-label="Фото отсутствует"><ShoppingBag size={36}/></span>}</div>;
 }
+function ProductImages({product}: {product:Product}) {
+  const {id, images, name, badge, isNew} = product;
+  const href = `#/product/${id}`;
+  const label = (isNew || badge) && <span className="tag">{badge || 'Новинка'}</span>;
+  if (images.length < 2) {
+    return <a className="product-card__image" href={href}>
+      <Photo src={images[0]} alt={name}/>{label}
+    </a>;
+  }
+  return <ProductCarousel images={images} name={name} href={href}>{label}</ProductCarousel>;
+}
+
+const AUTO_ADVANCE_MS = 4500;
+
+function ProductCarousel({images, name, href, children}: {images:string[]; name:string; href:string; children:ReactNode}) {
+  const track = useRef<HTMLDivElement>(null);
+  const [position, setPosition] = useState(0);
+  const [visible, setVisible] = useState(false);
+  const [paused, setPaused] = useState(false);
+  const [interacting, setInteracting] = useState(false);
+  const [focused, setFocused] = useState(false);
+  const [hovered, setHovered] = useState(false);
+  const [pageVisible, setPageVisible] = useState(() => document.visibilityState === 'visible');
+  const [reducedMotion, setReducedMotion] = useState(() => matchMedia('(prefers-reduced-motion: reduce)').matches);
+
+  useEffect(() => {
+    const motion = matchMedia('(prefers-reduced-motion: reduce)');
+    const changed = () => setReducedMotion(motion.matches);
+    motion.addEventListener('change', changed);
+    const visibilityChanged = () => setPageVisible(document.visibilityState === 'visible');
+    document.addEventListener('visibilitychange', visibilityChanged);
+    const observer = new IntersectionObserver(([entry]) => setVisible(entry.intersectionRatio >= .55), {threshold:.55});
+    if (track.current) observer.observe(track.current);
+    return () => {
+      observer.disconnect();
+      motion.removeEventListener('change', changed);
+      document.removeEventListener('visibilitychange', visibilityChanged);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!visible || !pageVisible || paused || interacting || focused || hovered || reducedMotion) return;
+    const timer = window.setTimeout(() => {
+      if (document.visibilityState !== 'visible') return;
+      const next = (position + 1) % images.length;
+      const element = track.current;
+      element?.scrollTo({left:next * element.clientWidth, behavior:next ? 'smooth' : 'instant'});
+    }, AUTO_ADVANCE_MS);
+    return () => window.clearTimeout(timer);
+  }, [visible,pageVisible,paused,interacting,focused,hovered,reducedMotion,position,images.length]);
+
+  function choose(index:number) {
+    const element = track.current;
+    element?.scrollTo({left:index * element.clientWidth, behavior:reducedMotion ? 'instant' : 'smooth'});
+  }
+
+  function blur(event:FocusEvent<HTMLDivElement>) {
+    if (!event.currentTarget.contains(event.relatedTarget)) setFocused(false);
+  }
+
+  return <div className="product-card__image product-carousel" role="group" aria-label={`Фото товара «${name}»`}
+    onMouseEnter={()=>setHovered(true)} onMouseLeave={()=>setHovered(false)}
+    onFocus={()=>setFocused(true)} onBlur={blur}>
+    <div className="product-carousel-track" ref={track}
+      onScroll={event=>{const element=event.currentTarget; if (element.clientWidth) setPosition(Math.round(element.scrollLeft / element.clientWidth));}}
+      onPointerDown={()=>setInteracting(true)} onPointerUp={()=>setInteracting(false)}
+      onPointerCancel={()=>setInteracting(false)} onPointerLeave={()=>setInteracting(false)}>
+      {images.map((src,index)=><a key={src} className="product-carousel-slide" href={href}
+        tabIndex={index===position?0:-1} aria-hidden={index!==position} aria-label={`Открыть товар «${name}»`}>
+        <Photo src={src} alt={name}/>
+      </a>)}
+    </div>
+    {children}
+    <div className="product-carousel-controls">
+      <div className="product-carousel-dots">
+        {images.map((src,index)=><button key={src} type="button" aria-label={`Показать фото ${index+1}`}
+          aria-current={index===position?'true':undefined} onClick={()=>choose(index)}/>)}
+      </div>
+      {!reducedMotion&&<button className="product-carousel-pause" type="button" onClick={()=>setPaused(!paused)}
+        aria-label={paused?'Включить автопрокрутку':'Остановить автопрокрутку'}>{paused?<Play size={14}/>:<Pause size={14}/>}</button>}
+    </div>
+  </div>;
+}
+
 export function Quantity({value,min,max,onChange,label='Количество упаковок'}:{value:number;min:number;max:number;onChange:(n:number)=>void;label?:string}){
  const[draft,setDraft]=useState(String(value));useEffect(()=>setDraft(String(value)),[value]);
  function commit(){const n=Number(draft);const clamped=Math.min(max,Math.max(min,Number.isFinite(n)?Math.floor(n):min));onChange(clamped);setDraft(String(clamped));}
@@ -17,7 +102,7 @@ export function Quantity({value,min,max,onChange,label='Количество у�
 export function ProductCard({p,list=false,detail=false}:{p:Product;list?:boolean;detail?:boolean}){
  const[n,setN]=useState(p.minimum);const{add,lines}=useCart();const inCart=lines.some(l=>l.id===p.id);
  return <article className={`product-card ${list?'product-card--list':''}`}>
-  {!detail&&<a className="product-card__image" href={`#/product/${p.id}`}><Photo src={p.images[0]} alt={p.name}/>{(p.isNew||p.badge)&&<span className="tag">{p.badge||'Новинка'}</span>}</a>}
+  {!detail&&<ProductImages product={p}/>}
   <div className="product-card__body"><div className="product-card__meta"><span>{p.category}</span><span>{p.sku}</span></div>{!detail&&<h3><a href={`#/product/${p.id}`}>{p.name}</a></h3>}<p className={`availability ${canOrder(p)?'':'unavailable'}`}>{canOrder(p)?'В наличии':'Нет в наличии'}</p>
   {p.description&&<p className={detail?'long-text':'card-description'}>{p.description}</p>}<div className="product-card__price"><strong>{money(p.price)}</strong><span> / шт.</span></div><p className="pack-info">{p.pack} шт. в упаковке · от {p.minimum} уп.</p><p className="pack-price">{money(p.price*p.pack)} <span>/ упаковка</span></p>
   <div className="product-card__buy"><Quantity value={n} min={p.minimum} max={Math.max(p.minimum,packLimit(p))} onChange={setN} label={`Упаковок товара ${p.name}`}/><button className="add-btn" disabled={!canOrder(p)} onClick={()=>add(p,n)} aria-label={`Добавить ${n} уп. товара ${p.name} в заказ`}>{inCart?<Check size={18}/>:<Plus size={18}/>}<span>{inCart?'Ещё в заказ':'В заказ'}</span></button></div><span className="card-total">{n} уп. · {n*p.pack} шт. · {money(n*p.price*p.pack)}</span>

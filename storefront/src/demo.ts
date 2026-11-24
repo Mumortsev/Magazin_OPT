@@ -15,11 +15,16 @@ type Order = {
   items:{id:number; name:string; sku:string|null; photo:string|null; packs:number; pieces:number; price:number; subtotal:number}[];
   history:{id:number; actor:string; status:string; created_at:string}[];
 };
-type State = {groups:Group[]; products:Item[]; orders:Order[]; content:Content; keys:Record<string,number>};
+type State = {groups:Group[]; products:Item[]; orders:Order[]; content:Content; keys:Record<string,number>; galleryVersion?:number};
 const storageKey = 'kurortnik-pages-demo-v1';
 const sessionKey = 'kurortnik-pages-session-v1';
 const staff = {id:1,name:'Демо-администратор',role:'admin',csrf:'demo'};
 const picture = (cell:number) => import.meta.env.BASE_URL + 'images/demo/' + cell + '.webp';
+const galleryDemoIds = new Set([1,2,3,4,8]);
+function starterImages(id:number, cell:number) {
+  const photo = picture(cell);
+  return galleryDemoIds.has(id) ? [photo,photo+'#detail'] : [photo];
+}
 const timestamp = () => new Date().toISOString();
 const nextId = (items:{id:number}[]) => Math.max(0,...items.map(item=>Math.abs(item.id))) + 1;
 
@@ -51,7 +56,7 @@ function initial():State {
     }
     return {id:index+1,name:product.name,description:product.description,sku:product.sku,country:null,badge_text:null,badge_bg_color:null,
       price_per_unit:product.price,pieces_per_pack:product.pack,min_order_packs:product.minimum,in_stock:product.available,
-      category_id:parent,subcategory_id:-group.id,active:true,is_new:!!product.isNew,images:[picture(product.photo)],updated_at:timestamp()};
+      category_id:parent,subcategory_id:-group.id,active:true,is_new:!!product.isNew,images:starterImages(index+1,product.photo),updated_at:timestamp()};
   });
   const content:Content = {
     title:'Курортник — витрина для оптовых покупателей',
@@ -67,13 +72,24 @@ function initial():State {
     orderFrom(items,101,[{product_id:1,quantity_packs:2},{product_id:3,quantity_packs:3}]),
     orderFrom(items,102,[{product_id:8,quantity_packs:2},{product_id:2,quantity_packs:1}],'processing'),
     orderFrom(items,103,[{product_id:9,quantity_packs:2}],'completed'),
-  ],keys:{}};
+  ],keys:{},galleryVersion:1};
 }
 
 function load():State {
   try {
     const stored = localStorage.getItem(storageKey);
-    return stored ? JSON.parse(stored) as State : initial();
+    if (!stored) return initial();
+    const state = JSON.parse(stored) as State;
+    if (!state.galleryVersion) {
+      for (const item of state.products) {
+        const seed = products[item.id-1];
+        if (seed && item.sku===seed.sku && item.images.length===1 && item.images[0]===picture(seed.photo)) {
+          item.images=starterImages(item.id,seed.photo);
+        }
+      }
+      state.galleryVersion=1;
+    }
+    return state;
   } catch { return initial(); }
 }
 
