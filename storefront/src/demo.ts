@@ -1,5 +1,6 @@
 import type {Category, Content} from './data';
 import {products, sections} from './demo-catalog';
+import {isCollection, type Collection} from './collections';
 
 type Group = {id:number; parent_id:number|null; name:string; order:number; active:boolean; image:string|null};
 type Item = {
@@ -19,10 +20,17 @@ type State = {groups:Group[]; products:Item[]; orders:Order[]; content:Content; 
 const storageKey = 'kurortnik-pages-demo-v1';
 const sessionKey = 'kurortnik-pages-session-v1';
 const staff = {id:1,name:'Демо-администратор',role:'admin',csrf:'demo'};
-const picture = (cell:number) => import.meta.env.BASE_URL + 'images/demo/' + cell + '.webp';
+const picture = (name:number|string) => import.meta.env.BASE_URL + 'images/demo/' + name + '.webp';
 const galleryDemoIds = new Set([1,2,3,4,8]);
-function starterImages(id:number, cell:number) {
+const collectionFields = {sale:'offer_ids', hits:'featured_ids'} as const;
+const collectionLimit = 24;
+const collectionPhotos = new Map([[5,'swim-mask'],[7,'compact-umbrella'],[16,'mini-bucket']]);
+function starterImages(id:number, cell:number, version=2) {
   const photo = picture(cell);
+  if (version===0) return [photo];
+  const collectionPhoto = version>=2 ? collectionPhotos.get(id) : undefined;
+  if (collectionPhoto) return [picture(collectionPhoto)];
+  if (id===4 && version>=2) return [photo,picture('swim-ring')];
   return galleryDemoIds.has(id) ? [photo,photo+'#detail'] : [photo];
 }
 const timestamp = () => new Date().toISOString();
@@ -66,13 +74,13 @@ function initial():State {
     banner_image:'/images/hero.webp',conditions:'Товары заказывают упаковками. Фасовка и минимальное количество указаны в каталоге.',
     delivery:'В рабочем магазине менеджер согласует с покупателем адрес, сроки и стоимость доставки.',
     phone:'',email:'',address:'',steps:['Найдите товары в каталоге.','Укажите количество упаковок.','Проверьте корзину и оформите тестовую заявку.'],
-    featured_ids:[1,3,6,9],offer_ids:[7,16],pages:{about:{title:'О компании',body:'«Курортник» — проект оптового магазина курортных товаров.'}},
+    featured_ids:[1,3,6,9],offer_ids:[7,16,5],pages:{about:{title:'О компании',body:'«Курортник» — проект оптового магазина курортных товаров.'}},
   };
   return {groups,products:items,content,orders:[
     orderFrom(items,101,[{product_id:1,quantity_packs:2},{product_id:3,quantity_packs:3}]),
     orderFrom(items,102,[{product_id:8,quantity_packs:2},{product_id:2,quantity_packs:1}],'processing'),
     orderFrom(items,103,[{product_id:9,quantity_packs:2}],'completed'),
-  ],keys:{},galleryVersion:1};
+  ],keys:{},galleryVersion:2};
 }
 
 function load():State {
@@ -80,14 +88,15 @@ function load():State {
     const stored = localStorage.getItem(storageKey);
     if (!stored) return initial();
     const state = JSON.parse(stored) as State;
-    if (!state.galleryVersion) {
+    const version = state.galleryVersion??0;
+    if (version<2) {
       for (const item of state.products) {
         const seed = products[item.id-1];
-        if (seed && item.sku===seed.sku && item.images.length===1 && item.images[0]===picture(seed.photo)) {
-          item.images=starterImages(item.id,seed.photo);
-        }
+        if (!seed || item.sku!==seed.sku) continue;
+        const previous = starterImages(item.id,seed.photo,version);
+        if (item.images.length===previous.length && item.images.every((image,index)=>image===previous[index])) item.images=starterImages(item.id,seed.photo);
       }
-      state.galleryVersion=1;
+      state.galleryVersion=2;
     }
     return state;
   } catch { return initial(); }
@@ -157,6 +166,7 @@ export async function demoApi(path:string, options:RequestInit):Promise<unknown>
   const publicProduct = (product:Item) => catalogProduct(product,groups);
   const id = Number(endpoint.split('/').at(-1));
   const search = (product:Item) => [product.name,product.sku].some(value=>value?.toLocaleLowerCase('ru').includes((query.get('q')??'').trim().toLocaleLowerCase('ru')));
+  const inCollection = (product:Item, collection:Collection) => collection==='new' ? product.is_new : content[collectionFields[collection]].includes(product.id);
 
   if (endpoint==='/shop/home') return {content,categories:categoryTree(groups)};
   if (endpoint==='/shop/highlights') {
@@ -172,17 +182,22 @@ export async function demoApi(path:string, options:RequestInit):Promise<unknown>
     const filter = query.get('filter');
     const stock = query.get('stock');
     const country = query.get('country')?.toLocaleLowerCase('ru');
+    const collection = query.get('collection');
+    const membersOnly = query.get('members_only')==='true';
     const items = (admin?products:visible).filter(item=>search(item) &&
       (!selected || (selected>0?item.category_id===selected:item.subcategory_id===-selected)) &&
       (!subcategory || item.subcategory_id===subcategory) &&
       (!country || item.country?.toLocaleLowerCase('ru').includes(country)) &&
       (query.get('newest')!=='true' || item.is_new) &&
+      (!isCollection(collection) || (admin ? !membersOnly || inCollection(item,collection) : inCollection(item,collection) && available(item))) &&
       (filter!=='new' || item.is_new) && (filter!=='hidden' || !item.active) &&
       (filter!=='out' || !available(item)) && (stock!=='yes' || available(item)) && (stock!=='no' || !available(item)));
     const sort = query.get('sort');
     items.sort((a,b)=>sort==='price_asc'?a.price_per_unit-b.price_per_unit:sort==='price_desc'?b.price_per_unit-a.price_per_unit:
       sort==='newest'?b.id-a.id:a.name.localeCompare(b.name,'ru'));
-    return admin ? page(items,query.get('page')) : page(items.map(publicProduct),query.get('page'));
+    if (!admin) return page(items.map(publicProduct),query.get('page'));
+    const result = page(items,query.get('page'));
+    return isCollection(collection) ? {...result,items:result.items.map(item=>({...item,in_collection:inCollection(item,collection)}))} : result;
   }
   if (endpoint.startsWith('/shop/products/')) {
     const product = visible.find(item=>item.id===id);
@@ -249,7 +264,32 @@ export async function demoApi(path:string, options:RequestInit):Promise<unknown>
   if (endpoint==='/admin/categories' && method==='GET') return groups;
   if (endpoint==='/admin/content') {
     if (method==='GET') return content;
-    state.content=JSON.parse(String(options.body)); save(state); return state.content;
+    const values=JSON.parse(String(options.body));
+    state.content={featured_ids:content.featured_ids,offer_ids:content.offer_ids,...values};
+    save(state);
+    return state.content;
+  }
+  const membership = endpoint.match(/^\/admin\/collections\/(sale|hits|new)\/(\d+)$/);
+  if (membership && method==='PUT') {
+    const collection = membership[1] as Collection;
+    const item = products.find(product=>product.id===id);
+    if (!item) throw new Error('Товар не найден.');
+    const {included} = JSON.parse(String(options.body)) as {included:boolean};
+    if (typeof included!=='boolean') throw new Error('Укажите участие товара в подборке.');
+    if (collection==='new') {
+      if (item.is_new!==included) item.updated_at=timestamp();
+      item.is_new=included;
+    } else {
+      const field = collectionFields[collection];
+      const ids = content[field];
+      if (included && !ids.includes(id)) {
+        if (ids.length>=collectionLimit) throw new Error(`В подборке может быть не больше ${collectionLimit} товаров.`);
+        ids.push(id);
+      }
+      if (!included) content[field]=ids.filter(key=>key!==id);
+    }
+    save(state);
+    return {included};
   }
   if (endpoint.startsWith('/admin/categories')) {
     if (method==='DELETE') {

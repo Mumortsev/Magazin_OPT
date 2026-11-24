@@ -1,7 +1,8 @@
 import {useEffect,useRef,useState,type FocusEvent,type ReactNode} from 'react';
-import {ArrowRight,Minus,Plus,ShoppingBag,Check,X,ChevronRight,Pause,Play} from 'lucide-react';
+import {ArrowRight,Minus,Plus,ShoppingBag,Check,X,ChevronRight,Pause,Play,Package} from 'lucide-react';
 import {money,canOrder,demoMode,packLimit,storefrontImage,type Product} from './data';
 import {useCart} from './cart';
+import {collections,type Collection} from './collections';
 export function Photo({src,alt,eager=false}:{src?:string|null;alt:string;eager?:boolean}) {
  const detail = demoMode && src?.endsWith('#detail');
  const [failed,setFailed]=useState(false);
@@ -10,10 +11,11 @@ export function Photo({src,alt,eager=false}:{src?:string|null;alt:string;eager?:
    ? <img src={storefrontImage(src)} alt={alt} loading={eager?'eager':'lazy'} decoding="async" onError={()=>setFailed(true)}/>
    : <span className="photo-fallback" role="img" aria-label="Фото отсутствует"><ShoppingBag size={36}/></span>}</div>;
 }
-function ProductImages({product}: {product:Product}) {
+function ProductImages({product,collection}: {product:Product;collection?:Collection}) {
   const {id, images, name, badge, isNew} = product;
   const href = `#/product/${id}`;
-  const label = (isNew || badge) && <span className="tag">{badge || 'Новинка'}</span>;
+  const label = collection ? <span className={`tag collection-tag collection-tag--${collection}`}>{collections[collection].title}</span>
+    : (isNew || badge) && <span className="tag">{badge || 'Новинка'}</span>;
   if (images.length < 2) {
     return <a className="product-card__image" href={href}>
       <Photo src={images[0]} alt={name}/>{label}
@@ -99,12 +101,15 @@ export function Quantity({value,min,max,onChange,label='Количество у�
  function commit(){const n=Number(draft);const clamped=Math.min(max,Math.max(min,Number.isFinite(n)?Math.floor(n):min));onChange(clamped);setDraft(String(clamped));}
  return <div className="quantity"><button type="button" aria-label={`Уменьшить: ${label}`} disabled={value<=min} onClick={()=>onChange(value-1)}><Minus size={16}/></button><input aria-label={label} type="number" inputMode="numeric" min={min} max={max} step="1" value={draft} onChange={e=>setDraft(e.target.value)} onBlur={commit} onKeyDown={e=>{if(e.key==='Enter'){e.preventDefault();commit();e.currentTarget.blur();}}}/><button type="button" aria-label={`Увеличить: ${label}`} disabled={value>=max} onClick={()=>onChange(value+1)}><Plus size={16}/></button></div>;
 }
-export function ProductCard({p,list=false,detail=false}:{p:Product;list?:boolean;detail?:boolean}){
+export function ProductCard({p,list=false,detail=false,collection}:{p:Product;list?:boolean;detail?:boolean;collection?:Collection}){
  const[n,setN]=useState(p.minimum);const{add,lines}=useCart();const inCart=lines.some(l=>l.id===p.id);
  return <article className={`product-card ${list?'product-card--list':''}`}>
-  {!detail&&<ProductImages product={p}/>}
+  {!detail&&<ProductImages product={p} collection={collection}/>}
+  {collection&&<div className={`collection-card-facts collection-card-facts--${collection}`}>
+    <span><Package size={16} aria-hidden="true"/> {p.pack} шт. в упаковке</span><span>От {p.minimum} уп.</span>
+  </div>}
   <div className="product-card__body"><div className="product-card__meta"><span>{p.category}</span><span>{p.sku}</span></div>{!detail&&<h3><a href={`#/product/${p.id}`}>{p.name}</a></h3>}<p className={`availability ${canOrder(p)?'':'unavailable'}`}>{canOrder(p)?'В наличии':'Нет в наличии'}</p>
-  {p.description&&<p className={detail?'long-text':'card-description'}>{p.description}</p>}<div className="product-card__price"><strong>{money(p.price)}</strong><span> / шт.</span></div><p className="pack-info">{p.pack} шт. в упаковке · от {p.minimum} уп.</p><p className="pack-price">{money(p.price*p.pack)} <span>/ упаковка</span></p>
+  {p.description&&<p className={detail?'long-text':'card-description'}>{p.description}</p>}<div className="product-card__price"><strong>{money(p.price)}</strong><span> / шт.</span></div>{!collection&&<p className="pack-info">{p.pack} шт. в упаковке · от {p.minimum} уп.</p>}<p className="pack-price">{money(p.price*p.pack)} <span>/ упаковка</span></p>
   <div className="product-card__buy"><Quantity value={n} min={p.minimum} max={Math.max(p.minimum,packLimit(p))} onChange={setN} label={`Упаковок товара ${p.name}`}/><button className="add-btn" disabled={!canOrder(p)} onClick={()=>add(p,n)} aria-label={`Добавить ${n} уп. товара ${p.name} в заказ`}>{inCart?<Check size={18}/>:<Plus size={18}/>}<span>{inCart?'Ещё в заказ':'В заказ'}</span></button></div><span className="card-total">{n} уп. · {n*p.pack} шт. · {money(n*p.price*p.pack)}</span>
   </div></article>;
 }

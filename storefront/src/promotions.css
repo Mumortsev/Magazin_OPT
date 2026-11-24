@@ -1,0 +1,103 @@
+.promotion { margin-top: clamp(1rem, 3vw, 2.5rem); }
+.promotion-heading {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.promotion-track {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x mandatory;
+  overscroll-behavior-inline: contain;
+  scrollbar-width: none;
+  border-radius: 1.1rem;
+}
+.promotion-track::-webkit-scrollbar { display: none; }
+.promotion-slide {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 45fr) minmax(0, 55fr);
+  min-height: clamp(20rem, 35vw, 27rem);
+  scroll-snap-align: start;
+  color: var(--promotion-ink);
+  background: var(--promotion-bg);
+}
+.promotion-slide--sale, .catalog-collection--sale, .collection-card-facts--sale, .collection-tag--sale {
+  --promotion-bg: #ffd4c8;
+  --promotion-ink: #61291f;
+}
+.promotion-slide--hits, .catalog-collection--hits, .collection-card-facts--hits, .collection-tag--hits {
+  --promotion-bg: #c3f3ec;
+  --promotion-ink: #123f3d;
+}
+.promotion-slide--new, .catalog-collection--new, .collection-card-facts--new, .collection-tag--new {
+  --promotion-bg: #ffe889;
+  --promotion-ink: #513915;
+}
+.promotion-copy {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: clamp(.6rem, 1.7vw, 1.35rem);
+  padding: clamp(1.2rem, 3.9vw, 4rem);
+}
+.promotion-copy h2 { font-size: clamp(2.3rem, 5.5vw, 5.25rem); line-height: 1; }
+.promotion-copy p { max-width: 23rem; font-size: clamp(.95rem, 1.8vw, 1.25rem); line-height: 1.45; }
+.promotion-copy .button { margin-top: .5rem; background: var(--promotion-ink); border-color: var(--promotion-ink); border-radius: .45rem; }
+.promotion-copy .button:hover { filter: brightness(1.2); }
+.promotion-copy .button:focus-visible { outline-offset: 3px; }
+.promotion-image {
+  position: absolute;
+  inset: 0 0 0 45%;
+  width: 55%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+}
+.promotion-controls { display: flex; justify-content: center; align-items: center; gap: .45rem; padding-top: .65rem; }
+.promotion-controls button { min-width: 2.75rem; min-height: 2.75rem; display: inline-grid; place-items: center; border-radius: 50%; }
+.promotion-arrow, .promotion-pause { border: 1px solid var(--line); color: var(--blue-dark); }
+.promotion-arrow:hover, .promotion-pause:hover { background: #e7eef0; }
+.promotion-dots { display: flex; }
+.promotion-dots button { min-width: 2rem; }
+.promotion-dots span { width: .52rem; height: .52rem; border-radius: 1rem; background: #a2b7b7; transition: width .2s; }
+.promotion-dots [aria-current] span { width: 1.2rem; background: var(--blue-dark); }
+.promotion-pause { margin-left: .45rem; }
+.collection-heading { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: .6rem 1rem; }
+.catalog-collections { display: flex; flex-wrap: wrap; gap: .6rem; margin-block: 1rem 1.5rem; }
+.catalog-collection, .collection-card-facts, .collection-tag.tag { background: var(--promotion-bg); color: var(--promotion-ink); }
+.catalog-collection { padding: .55rem .9rem; border-radius: .4rem; font-size: .95rem; font-weight: 600; }
+.catalog-collection:hover { text-decoration: underline; }
+.collection-tag.tag { border-radius: .3rem; font-size: .75rem; letter-spacing: 0; }
+.collection-card-facts {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: .25rem .7rem;
+  margin-top: .35rem;
+  padding: .5rem .65rem;
+  border-radius: .3rem;
+  font-size: .78rem;
+  font-weight: 650;
+}
+.collection-card-facts span:first-child { display: inline-flex; align-items: center; gap: .35rem; }
+.promotion-intro { display: grid; grid-template-columns: 1fr minmax(0, 28%); align-items: center; gap: 1.5rem; }
+.promotion-intro p { max-width: 50ch; margin-block: .5rem; }
+.promotion-intro .product-photo { aspect-ratio: 1.8; }
+
+@media (max-width: 640px) {
+  .promotion-slide { min-height: 0; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto 1fr; }
+  .promotion-image { grid-row: 1; position: static; width: 100%; height: auto; aspect-ratio: 1.7; }
+  .promotion-copy { grid-row: 2; padding: 1.15rem 1.2rem; }
+  .promotion-copy h2 { font-size: clamp(2.35rem, 9vw, 3.7rem); }
+  .promotion-copy .button { min-height: 44px; margin-top: .3rem; padding: .55rem .75rem; font-size: .875rem; }
+  .promotion-intro { grid-template-columns: minmax(0, 1fr); }
+}

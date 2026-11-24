@@ -2,6 +2,7 @@ import {useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode
 import {BarChart3, Bell, ClipboardList, Ellipsis, Eye, EyeOff, FileSpreadsheet, FolderTree, LayoutTemplate, LogOut, Package, Pencil, Phone, Plus, ShoppingBag, Trash2} from 'lucide-react';
 import {adminRoot, api, demoMode, money, phoneHref, setCsrf, type Content} from './data';
 import {Photo} from './ui';
+import {collectionHref, collectionKeys, collections, isCollection, type Collection} from './collections';
 import './admin.css';
 
 type Staff = {id:number; name:string; role:'admin'|'manager'; csrf:string};
@@ -24,17 +25,18 @@ const sections = [
 ] as const;
 
 function useQuery<T>(path:string, revision=0) {
-  const [data,setData]=useState<T>();
-  const [error,setError]=useState('');
+  const [result,setResult]=useState<{path:string;revision:number;data?:T;error?:string}>();
   useEffect(()=>{
     const controller = new AbortController();
-    setError('');
-    api<T>('/admin'+path,{signal:controller.signal}).then(setData).catch(err=>{
-      if(!controller.signal.aborted) setError(err.message);
+    api<T>('/admin'+path,{signal:controller.signal}).then(data=>{
+      if(!controller.signal.aborted) setResult({path,revision,data});
+    }).catch(err=>{
+      if(!controller.signal.aborted) setResult(previous=>({path,revision,data:previous?.data,error:err.message}));
     });
     return ()=>controller.abort();
   },[path,revision]);
-  return {data,error};
+  const pending=result?.path!==path || result.revision!==revision;
+  return {data:result?.data,error:pending?'':result?.error??'',pending};
 }
 
 function useEditor() {
@@ -188,6 +190,7 @@ function CatalogAdmin({categories=false,onProducts}:{categories?:boolean;onProdu
       </div>
       {!edit&&<button className="button" onClick={()=>change('new')}><Plus size={19}/>{categories?'Добавить категорию':'Добавить товар'}</button>}
     </div>
+    {categories&&!edit&&<CollectionLinks/>}
     {action.feedback}{listError&&<p role="alert" className="error-text">{listError}</p>}
     {edit ? <div className="admin-panel"><h2>{edit==='new'?(categories?'Новая категория':'Новый товар'):edit.name}</h2>{categories
       ? <CategoryEditor key={edit==='new'?'new':edit.id} category={edit==='new'?undefined:edit as Category} tree={tree.data??[]} save={save} mark={editor.mark} busy={action.busy} close={()=>change(null)}/>
@@ -233,6 +236,67 @@ function CatalogAdmin({categories=false,onProducts}:{categories?:boolean;onProdu
         })}
       </ul>
       {!categories&&<Pager page={page} total={products.data?.total??0} setPage={setPage}/>}
+    </>}
+  </>;
+}
+
+function CollectionLinks() {
+  return <section className="admin-collections" aria-labelledby="collection-links-title">
+    <h2 id="collection-links-title">Подборки для баннеров</h2>
+    <div className="admin-collection-links">
+      {collectionKeys.map(key=><a key={key} className={`admin-collection-link admin-collection-link--${key}`}
+        href={`${adminRoot}?section=categories&collection=${key}`}><FolderTree size={18}/>{collections[key].title}</a>)}
+    </div>
+  </section>;
+}
+
+function CollectionAdmin({collection}:{collection:Collection}) {
+  const [page,setPage]=useState(1);
+  const [search,setSearch]=useState('');
+  const [membersOnly,setMembersOnly]=useState(true);
+  const [revision,refresh]=useState(0);
+  const action=useAction();
+  const params=new URLSearchParams({collection,q:search,page:String(page),members_only:String(membersOnly)});
+  const result=useQuery<{items:(Product&{in_collection:boolean})[];total:number;pages:number}>('/products?'+params,revision);
+
+  useEffect(()=>{
+    if (!result.pending && result.data && page>result.data.pages) setPage(result.data.pages);
+  },[page,result.data,result.pending]);
+
+  return <>
+    <div className="admin-section-heading">
+      <div><a className="button secondary admin-back" href={`${adminRoot}?section=categories`}>Все категории</a>
+        <h1>{collections[collection].title}</h1></div>
+      <a className="button secondary" href={import.meta.env.BASE_URL+collectionHref(collection)}>Открыть на витрине</a>
+    </div>
+    <div className="admin-collection-controls">
+      <div className="actions" role="group" aria-label="Список товаров">
+        <button type="button" className={`button${membersOnly?'':' secondary'}`} aria-pressed={membersOnly} onClick={()=>{setMembersOnly(true);setPage(1);}}>В подборке</button>
+        <button type="button" className={`button${membersOnly?' secondary':''}`} aria-pressed={!membersOnly} onClick={()=>{setMembersOnly(false);setPage(1);}}>Добавить товары</button>
+      </div>
+      <Field type="search" label="Поиск товара" placeholder="Название или артикул" maxLength={120} value={search}
+        onChange={event=>{setSearch(event.target.value);setPage(1);}}/>
+    </div>
+    {action.feedback}
+    {result.error ? <p role="alert">{result.error}</p> : result.pending || !result.data ? <p role="status">Загрузка…</p> : <>
+      {!result.data.items.length&&<p className="admin-panel">{membersOnly&&!search?'В подборке пока нет товаров.':'Товары не найдены.'}</p>}
+      <ul className="admin-catalog-list admin-collection-products" aria-label="Товары подборки">
+        {result.data.items.map(item=><li key={item.id} className="admin-row">
+          <div className="admin-row-photo"><Photo src={item.images[0]} alt={item.name}/></div>
+          <div className="admin-row-identity"><h2>{item.name}</h2><span className="admin-row-muted">{item.sku||'Без артикула'} · №{item.id}</span></div>
+          <div className="admin-row-facts"><strong>{money(item.price_per_unit)} <small>за шт.</small></strong>
+            {!item.active&&<span>Товар скрыт</span>}{item.in_stock!==null&&item.in_stock<item.min_order_packs&&<span>Недостаточно товара</span>}</div>
+          <button type="button" className={`button${item.in_collection?' secondary':''}`} disabled={action.busy}
+            aria-label={`${item.in_collection?'Убрать':'Добавить'} ${item.name}`}
+            onClick={()=>void action.run(async()=>{
+              await write(`/collections/${collection}/${item.id}`,'PUT',{included:!item.in_collection});
+              refresh(value=>value+1);
+            },item.in_collection?'Товар убран из подборки':'Товар добавлен в подборку')}>
+            {item.in_collection?'Убрать':'Добавить'}
+          </button>
+        </li>)}
+      </ul>
+      <Pager page={page} total={result.data.total} setPage={setPage}/>
     </>}
   </>;
 }
@@ -336,16 +400,14 @@ function ContentEditor({content}:{content:Content}) {
   const setPage=(index:number,field:'slug'|'title'|'body',value:string)=>setPages(previous=>previous.map((p,i)=>i===index?{...p,[field]:value}:p));
   return <form className="admin-form" onChange={editor.mark} onSubmit={event=>{
     event.preventDefault();const form=Object.fromEntries(new FormData(event.currentTarget));
-    const ids=(value:FormDataEntryValue)=>String(value).split(/[,\s]+/).filter(Boolean).map(Number);
     void action.run(async()=>{if(new Set(pages.map(page=>page.slug)).size!==pages.length)throw new Error('Адреса информационных страниц должны различаться.');
-      await write('/content','PUT',{...form,banner_image:image,steps:String(form.steps).split('\n').map(line=>line.trim()).filter(Boolean),featured_ids:ids(form.featured_ids),offer_ids:ids(form.offer_ids),pages:Object.fromEntries(pages.map(page=>[page.slug,{title:page.title,body:page.body}]))});editor.saved();
+      await write('/content','PUT',{...form,banner_image:image,steps:String(form.steps).split('\n').map(line=>line.trim()).filter(Boolean),pages:Object.fromEntries(pages.map(page=>[page.slug,{title:page.title,body:page.body}]))});editor.saved();
     });
   }}>
-    {([['title','SEO-заголовок'],['description','SEO-описание'],['banner_title','Заголовок баннера'],['banner_text','Текст баннера'],['phone','Телефон'],['email','Электронная почта'],['address','Адрес']] as const).map(([name,label])=><Field key={name} name={name} label={label} defaultValue={content[name]}/>)}
-    <Field label="Изображение баннера" value={image} onChange={event=>setImage(event.target.value)}/><UploadImage onImage={url=>{setImage(url);editor.mark();}}/>
+    {([['title','SEO-заголовок'],['description','SEO-описание'],['banner_title','Заголовок блока о магазине'],['banner_text','Текст блока о магазине'],['phone','Телефон'],['email','Электронная почта'],['address','Адрес']] as const).map(([name,label])=><Field key={name} name={name} label={label} defaultValue={content[name]}/>)}
+    <Field label="Изображение блока о магазине" value={image} onChange={event=>setImage(event.target.value)}/><UploadImage onImage={url=>{setImage(url);editor.mark();}}/>
     <label>Условия заказа<textarea name="conditions" defaultValue={content.conditions}/></label><label>Доставка<textarea name="delivery" defaultValue={content.delivery}/></label>
     <label>Порядок заказа, один шаг на строку<textarea name="steps" defaultValue={content.steps.join('\n')}/></label>
-    <Field name="featured_ids" label="Номера популярных товаров через запятую" defaultValue={content.featured_ids.join(', ')}/><Field name="offer_ids" label="Номера товаров со спецпредложениями через запятую" defaultValue={content.offer_ids.join(', ')}/>
     <h2>Информационные страницы</h2>{pages.map((page,index)=><fieldset key={index}><Field label="Адрес страницы" required pattern="[a-z0-9-]+" value={page.slug} onChange={event=>setPage(index,'slug',event.target.value)}/><Field label="Заголовок страницы" required value={page.title} onChange={event=>setPage(index,'title',event.target.value)}/><label>Текст страницы<textarea value={page.body} onChange={event=>setPage(index,'body',event.target.value)}/></label><button type="button" onClick={()=>{if(confirm('Удалить информационную страницу?')){setPages(previous=>previous.filter((_,i)=>i!==index));editor.mark();}}}>Удалить страницу</button></fieldset>)}
     <button type="button" className="button secondary" onClick={()=>{setPages(previous=>[...previous,{slug:'',title:'',body:''}]);editor.mark();}}>Добавить страницу</button>
     {action.feedback}<button className="button" disabled={action.busy}>Сохранить содержимое</button>
@@ -424,6 +486,7 @@ export default function Admin() {
   if(!staff)return <Login onLogin={accept}/>;
   const available=sections.filter(([name])=>staff.role==='admin'||name==='orders'||name==='notifications');
   const screen=available.some(([name])=>name===section)?section:'orders';
+  const collection=new URLSearchParams(location.search).get('collection');
   function navigate(target:string,category?:number) {
     const query=target==='orders'?'':`?section=${target}${category?'&category='+category:''}`;
     // A document navigation lets beforeunload protect any active editor.
@@ -433,7 +496,7 @@ export default function Admin() {
   const panels:Record<string,ReactNode>={
     orders:<Orders staff={staff} revision={revision} refresh={refresh}/>,
     products:<CatalogAdmin onProducts={id=>navigate('products',id)}/>,
-    categories:<CatalogAdmin categories onProducts={id=>navigate('products',id)}/>,
+    categories:isCollection(collection) ? <CollectionAdmin key={collection} collection={collection}/> : <CatalogAdmin categories onProducts={id=>navigate('products',id)}/>,
     analytics:<Analytics revision={revision}/>,import:demoMode?<DemoImport/>:<Import/>,content:<ContentAdmin/>,
     notifications:demoMode?<><h1>Уведомления</h1><p>Сводка заявок обновляется в этом браузере. Web Push и почта доступны после подключения сервера.</p></>:<Notifications staff={staff}/>,
   };

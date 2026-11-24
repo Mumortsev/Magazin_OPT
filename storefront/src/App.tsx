@@ -1,8 +1,10 @@
 import {lazy, Suspense, useEffect, useRef, useState, type FormEvent} from 'react';
-import {Check, Package, Phone, Search, ShoppingBag, Trash2} from 'lucide-react';
+import {Check, Phone, Search, ShoppingBag, Trash2} from 'lucide-react';
 import {adminRoot, api, canOrder, demoMode, money, packLimit, phoneHref, type Category, type Content, type Product} from './data';
 import {CartProvider, useCart} from './cart';
 import {Breadcrumb, ConfirmDialog, Empty, Photo, ProductCard, Quantity} from './ui';
+import PromotionCarousel from './PromotionCarousel';
+import {collectionHref, collectionKeys, collections, isCollection, type Collection} from './collections';
 
 const Admin = lazy(() => import('./admin'));
 type ProductPageData = {items: Product[]; pages: number};
@@ -72,22 +74,23 @@ function CategoryTile({name, image, href}: {name: string; image: string | null; 
 function Home({content, categories}: {content: Content; categories: Category[]}) {
   const groups = useData<{featured: Product[]; offers: Product[]; newest: Product[]}>('/shop/highlights');
   return <>
-    <section className="hero container live-hero">
-      <div className="hero-content"><p className="eyebrow">Пляж · отдых · сувениры</p><h1>{content.banner_title}</h1><p className="hero-lede">{content.banner_text}</p>
-        <div className="actions"><a className="button" href="#/catalog">Открыть каталог</a><a className="button secondary" href="#/conditions">Условия опта</a></div>
-        <p className="hero-caption"><Package size={20}/> Заказ упаковками</p>
-      </div>
-      <div className="live-hero-image"><Photo src={content.banner_image} alt="Курортный ассортимент" eager/></div>
-    </section>
+    <PromotionCarousel/>
     <section className="container section"><h2>Категории товаров</h2><div className="categories">
       {categories.map(category => <CategoryTile key={category.id} name={category.name} image={category.image} href={`#/catalog?category=${category.id}`}/>)}
     </div></section>
-    {groups?.data ? ([['Популярные товары', groups.data.featured], ['Новинки', groups.data.newest], ['Специальные предложения', groups.data.offers]] as const)
+    {groups?.data ? ([['hits', groups.data.featured], ['new', groups.data.newest], ['sale', groups.data.offers]] as const)
       .filter(([, products]) => products.length)
-      .map(([title, products]) => <section key={title} className="container section"><h2>{title}</h2><div className="product-grid home-grid">{products.map(product => <ProductCard key={product.id} p={product}/>)}</div></section>) : <div className="container"><Feedback error={groups?.error}/></div>}
+      .map(([key, products]) => <section key={key} className="container section">
+        <div className="collection-heading"><h2>{collections[key].title}</h2><a className="underline-link" href={collectionHref(key)}>Вся подборка</a></div>
+        <div className="product-grid home-grid">{products.slice(0,4).map(product => <ProductCard key={product.id} p={product} collection={key}/>)}</div>
+      </section>) : <div className="container"><Feedback error={groups?.error}/></div>}
     <section className="container section how-section"><h2>Как оформить заявку</h2>
       <ol className="steps live-steps">{content.steps.map((step, index) => <li key={index}>{step}</li>)}</ol>
       <p>{content.conditions}</p><a href="#/conditions" className="underline-link">Условия закупки и доставки</a>
+    </section>
+    <section className="container section promotion-intro">
+      <div><h2>{content.banner_title}</h2><p>{content.banner_text}</p><a className="underline-link" href="#/catalog">Открыть каталог</a></div>
+      {content.banner_image && <Photo src={content.banner_image} alt="Курортный ассортимент"/>}
     </section>
   </>;
 }
@@ -97,13 +100,17 @@ function showsCatalogProducts(query: URLSearchParams) {
 }
 
 function Catalog({query, categories}: {query: URLSearchParams; categories: Category[]}) {
-  if (showsCatalogProducts(query)) {
-    return <CatalogProducts query={query} categories={categories}/>;
+  const collection = query.get('collection');
+  if (isCollection(collection) || showsCatalogProducts(query)) {
+    return <CatalogProducts query={query} categories={categories} collection={isCollection(collection) ? collection : undefined}/>;
   }
 
   return <div className="container catalog-page">
     <Breadcrumb name="Каталог"/>
     <h1>Каталог товаров</h1>
+    <nav className="catalog-collections" aria-label="Подборки товаров">
+      {collectionKeys.map(key => <a key={key} className={`catalog-collection catalog-collection--${key}`} href={collectionHref(key)}>{collections[key].title}</a>)}
+    </nav>
     <nav className="categories catalog-categories" aria-label="Категории каталога">
       <CategoryTile name="Все товары" image="/images/hero.webp" href="#/catalog?all=1"/>
       {categories.map(category => <CategoryTile key={category.id} name={category.name} image={category.image} href={`#/catalog?category=${category.id}`}/>)}
@@ -111,7 +118,7 @@ function Catalog({query, categories}: {query: URLSearchParams; categories: Categ
   </div>;
 }
 
-function CatalogProducts({query, categories}: {query: URLSearchParams; categories: Category[]}) {
+function CatalogProducts({query, categories, collection}: {query: URLSearchParams; categories: Category[]; collection?: Collection}) {
   const [draft, setDraft] = useState(query.get('q') ?? '');
   const [search, setSearch] = useState(draft);
   const [sort, setSort] = useState('name');
@@ -120,9 +127,10 @@ function CatalogProducts({query, categories}: {query: URLSearchParams; categorie
   const newOnly = query.get('new') === '1';
   const filters = new URLSearchParams({q:search, sort, newest:String(newOnly), page:String(page)});
   if (category) filters.set('category', category);
+  if (collection) filters.set('collection', collection);
   const result = useData<ProductPageData>('/shop/products?' + filters);
   const selectedCategory = categories.find(item => String(item.id) === category);
-  const title = selectedCategory?.name ?? (search ? 'Результаты поиска' : newOnly ? 'Новинки' : 'Все товары');
+  const title = collection ? collections[collection].title : selectedCategory?.name ?? (search ? 'Результаты поиска' : newOnly ? 'Новинки' : 'Все товары');
 
   return <div className="container catalog-page"><Breadcrumb name={title} parent="Каталог"/><h1>{title}</h1>
     <form className="catalog-controls" onSubmit={event => {
@@ -142,7 +150,7 @@ function CatalogProducts({query, categories}: {query: URLSearchParams; categorie
       </select>
     </form>
     {!result?.data ? <Feedback error={result?.error}/> : result.data.items.length
-      ? <div className="product-grid">{result.data.items.map(product => <ProductCard key={product.id} p={product}/>)}</div>
+      ? <div className="product-grid">{result.data.items.map(product => <ProductCard key={product.id} p={product} collection={collection}/>)}</div>
       : <p>Товары по этим условиям не найдены.</p>}
     {result?.data && result.data.pages > 1 && <nav className="pagination" aria-label="Страницы каталога"><button disabled={page===1} onClick={()=>setPage(page-1)}>Назад</button><span>{page} из {result.data.pages}</span><button disabled={page>=result.data.pages} onClick={()=>setPage(page+1)}>Далее</button></nav>}
   </div>;

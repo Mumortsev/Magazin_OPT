@@ -36,6 +36,19 @@
 .admin-section-heading {display:flex; align-items:center; justify-content:space-between; gap:.5rem 1rem; flex-wrap:wrap; margin-bottom:.85rem;}
 .admin-section-heading h1 {margin:0; overflow-wrap:anywhere;}
 .admin-section-heading .admin-back {min-height:2.3rem; padding:.25rem .65rem; margin-bottom:.45rem;}
+.admin-collections {margin-block:.85rem 1.25rem;}
+.admin-collections h2 {margin-block:0 .65rem;}
+.admin-collection-links {display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,10rem),1fr)); gap:.5rem;}
+.admin-collection-link {display:flex; align-items:center; gap:.5rem; min-height:2.75rem; padding:.55rem .75rem; border:1px solid currentColor; border-radius:.5rem; font-weight:650;}
+.admin-collection-link:hover {text-decoration:underline;}
+.admin-collection-link--sale {background:#ffd4c8; color:#61291f;}
+.admin-collection-link--hits {background:#c3f3ec; color:#123f3d;}
+.admin-collection-link--new {background:#ffe889; color:#513915;}
+.admin-collection-controls {display:flex; flex-wrap:wrap; align-items:end; gap:.65rem 1rem; margin-block:1rem;}
+.admin-collection-controls label {display:grid; gap:.3rem; flex:1 1 12rem; min-width:0; max-width:30rem;}
+.admin-collection-controls input {width:100%; min-height:2.75rem; padding:.5rem; border:1px solid #748c96; border-radius:.4rem; background:#fff;}
+.admin-collection-controls .button,.admin-collection-products .button {min-height:2.75rem; padding:.4rem .7rem;}
+.admin-collection-products .admin-row>.button {justify-self:start; grid-column:1/-1;}
 .admin-catalog-filters {
   display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:.65rem;
   padding:.85rem; border:1px solid #c5dce0; border-radius:.65rem; background:#dcebed; color:#183641;
@@ -96,5 +109,7 @@
  .admin-row-identity {padding-right:0;}
  .admin-row-facts,.admin-row-actions {grid-column:auto;}
  .admin-row-select {position:static;}
+ .admin-collection-products .admin-row {grid-template-columns:5.5rem minmax(0,1.2fr) minmax(6rem,.7fr) auto;}
+ .admin-collection-products .admin-row>.button {grid-column:auto;}
 }
 .admin-order-thumbnail {width:3.2rem; height:3.2rem; flex-shrink:0; object-fit:cover; border-radius:.35rem;}

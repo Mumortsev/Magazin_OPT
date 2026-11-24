@@ -27,6 +27,9 @@ admin = APIRouter(prefix="/api/v1/admin", dependencies=[Depends(admin_only)])
 MEDIA = Path(os.getenv("SHOP_MEDIA_DIR", str(get_upload_dir())))
 PAGE_SIZE = 30
 Name = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=255)]
+Collection = Literal["sale", "hits", "new"]
+COLLECTION_FIELDS = {"sale": "offer_ids", "hits": "featured_ids"}
+COLLECTION_LIMIT = 24
 
 
 @event.listens_for(engine.sync_engine, "connect")
@@ -122,8 +125,8 @@ class Content(BaseModel):
     email: str = Field(default="", max_length=254, pattern=r"^(?:[\w.+-]+@[\w.-]+\.[a-zA-Z]{2,}|)$")
     address: str = Field(default="", max_length=500)
     steps: list[Name] = Field(default_factory=lambda: ["Найдите нужные товары в каталоге.", "Укажите количество упаковок и проверьте корзину.", "Отправьте заявку и дождитесь звонка менеджера."], max_length=12)
-    featured_ids: list[Annotated[int, Field(gt=0)]] = Field(default_factory=list, max_length=24)
-    offer_ids: list[Annotated[int, Field(gt=0)]] = Field(default_factory=list, max_length=24)
+    featured_ids: list[Annotated[int, Field(gt=0)]] = Field(default_factory=list, max_length=COLLECTION_LIMIT)
+    offer_ids: list[Annotated[int, Field(gt=0)]] = Field(default_factory=list, max_length=COLLECTION_LIMIT)
     pages: dict[Annotated[str, StringConstraints(pattern=r"^[a-z0-9-]{1,80}$")], InformationPage] = Field(default_factory=lambda: {
         "about": InformationPage(title="О компании", body="Курортник — оптовый каталог пляжных принадлежностей, летней обуви и сувениров."),
         "privacy": InformationPage(title="Обработка контактных данных", body="Контактные данные из заявки используются для связи с покупателем и согласования заказа."),
@@ -138,6 +141,12 @@ class Content(BaseModel):
 async def get_content(db: AsyncSession) -> Content:
     row = await db.get(ContentRecord, 1)
     return Content.model_validate(row.value) if row else Content()
+
+
+def collection_filter(collection: Collection, content: Content):
+    if collection == "new":
+        return Product.is_new.is_(True)
+    return Product.id.in_(getattr(content, COLLECTION_FIELDS[collection]))
 
 
 @public.get("/home")
@@ -170,11 +179,13 @@ async def paginate(db, query, sort, page, transform):
 async def products(q: str = Query("", max_length=120), category: int | None = None, subcategory: int | None = None,
     sort: Literal["name", "price_asc", "price_desc", "newest"] = "name", stock: Literal["", "yes", "no"] = "",
     country: str = Query("", max_length=100), newest: bool = False, page: int = Query(1, ge=1, le=100000),
-    db: AsyncSession = Depends(get_db)):
+    collection: Collection | None = None, db: AsyncSession = Depends(get_db)):
     query = search_products(visible_products(), q)
     if category: query = query.where(Product.category_id == category)
     if subcategory: query = query.where(Product.subcategory_id == subcategory)
     if newest: query = query.where(Product.is_new.is_(True))
+    if collection:
+        query = query.where(collection_filter(collection, await get_content(db)), stock_filter())
     if stock: query = query.where(stock_filter() if stock == "yes" else ~stock_filter())
     if country.strip(): query = query.where(func.instr(func.shop_casefold(Product.country), country.strip().casefold()) > 0)
     sorting = {"name": func.shop_casefold(Product.name), "price_asc": Product.price_per_unit.asc(),
@@ -206,17 +217,22 @@ async def read_content(db: AsyncSession = Depends(get_db)):
 @admin.put("/content")
 async def save_content(content: Content, staff: Staff = Depends(admin_only), db: AsyncSession = Depends(get_db)):
     await begin_write(db)
-    ids = set(content.featured_ids + content.offer_ids)
+    row = await db.get(ContentRecord, 1)
+    fields = content.model_fields_set.intersection(COLLECTION_FIELDS.values())
+    ids = {key for field in fields for key in getattr(content, field)}
     if ids != set((await db.scalars(select(Product.id).where(Product.id.in_(ids)))).all()):
         raise HTTPException(400, "В подборке указан неизвестный товар")
-    row = await db.get(ContentRecord, 1)
+    values = content.model_dump()
     if row:
-        row.value = content.model_dump()
+        for field in COLLECTION_FIELDS.values():
+            if field not in fields and field in row.value:
+                values[field] = row.value[field]
+        row.value = values
     else:
-        db.add(ContentRecord(id=1, value=content.model_dump()))
+        db.add(ContentRecord(id=1, value=values))
     audit(db, staff, "content.save", 1)
     await db.commit()
-    return content
+    return values
 
 
 @admin.get("/categories")
@@ -315,14 +331,57 @@ def admin_product(item: Product):
 
 @admin.get("/products")
 async def admin_products(q: str = Query("", max_length=120), filter: Literal["", "new", "hidden", "out"] = "",
-    category: str = Query("", pattern=r"^-?\d{0,10}$"), page: int = Query(1, ge=1, le=100000), db: AsyncSession = Depends(get_db)):
+    category: str = Query("", pattern=r"^-?\d{0,10}$"), page: int = Query(1, ge=1, le=100000),
+    collection: Collection | None = None, members_only: bool = False, db: AsyncSession = Depends(get_db)):
     query = search_products(select(Product).options(selectinload(Product.images)), q)
     if category and category != "-":
         key = int(category)
         query = query.where(Product.subcategory_id == -key if key < 0 else Product.category_id == key)
     if filter:
         query = query.where({"new": Product.is_new.is_(True), "hidden": Product.active.is_(False), "out": ~stock_filter()}[filter])
+    if collection:
+        content = await get_content(db)
+        if members_only:
+            query = query.where(collection_filter(collection, content))
+        ids = set(getattr(content, COLLECTION_FIELDS[collection])) if collection != "new" else set()
+        return await paginate(db, query, func.shop_casefold(Product.name), page, lambda item: {
+            **admin_product(item), "in_collection": item.is_new if collection == "new" else item.id in ids,
+        })
     return await paginate(db, query, func.shop_casefold(Product.name), page, admin_product)
+
+
+class CollectionMembership(BaseModel):
+    included: bool
+
+
+@admin.put("/collections/{collection}/{key}")
+async def set_collection_membership(collection: Collection, key: int, values: CollectionMembership,
+    staff: Staff = Depends(admin_only), db: AsyncSession = Depends(get_db)):
+    await begin_write(db)
+    item = await db.get(Product, key)
+    if item is None:
+        raise HTTPException(404, "Товар не найден")
+    if collection == "new":
+        item.is_new = values.included
+    else:
+        row = await db.get(ContentRecord, 1)
+        content = Content.model_validate(row.value) if row else Content()
+        field = COLLECTION_FIELDS[collection]
+        ids = getattr(content, field)
+        if values.included and key not in ids:
+            if len(ids) >= COLLECTION_LIMIT:
+                raise HTTPException(409, f"В подборке может быть не больше {COLLECTION_LIMIT} товаров")
+            ids.append(key)
+        if not values.included:
+            ids = [value for value in ids if value != key]
+        updated = {**content.model_dump(), field: ids}
+        if row:
+            row.value = updated
+        else:
+            db.add(ContentRecord(id=1, value=updated))
+    audit(db, staff, f"collection.{collection}.{'add' if values.included else 'remove'}", key)
+    await db.commit()
+    return {"included": values.included}
 
 
 class Bulk(BaseModel):
