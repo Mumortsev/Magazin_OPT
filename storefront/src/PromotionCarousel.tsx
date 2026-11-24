@@ -1,16 +1,17 @@
-import {useEffect, useRef, useState} from 'react';
+import {useEffect, useState} from 'react';
 import {ArrowRight} from 'lucide-react';
 import {collectionHref, collectionKeys, collections} from './collections';
 import {CarouselDots} from './ui';
+import {carouselFrames, useLoopingCarousel} from './carousel';
 import './promotions.css';
 
 const rotationDelay = 6500;
 const reducedMotionQuery = '(prefers-reduced-motion: reduce)';
 const bannerLabels = collectionKeys.map(key => collections[key].title);
+const bannerFrames = carouselFrames(collectionKeys.length);
 
 export default function PromotionCarousel() {
-  const track = useRef<HTMLDivElement>(null);
-  const [index, setIndex] = useState(0);
+  const {track, active, select, advance} = useLoopingCarousel(collectionKeys.length);
   const [paused, setPaused] = useState(false);
   const [hovered, setHovered] = useState(false);
   const [focused, setFocused] = useState(false);
@@ -31,22 +32,17 @@ export default function PromotionCarousel() {
       motion.removeEventListener('change', motionChanged);
       document.removeEventListener('visibilitychange', visibilityChanged);
     };
-  }, []);
+  }, [track]);
 
   useEffect(() => {
     if (paused || hovered || focused || !visible || !pageVisible || reducedMotion) return;
-    const timer = window.setTimeout(() => {
-      const element = track.current;
-      const next = (index + 1) % collectionKeys.length;
-      element?.scrollTo({left: next * element.clientWidth, behavior: next === 0 ? 'instant' : 'smooth'});
-    }, rotationDelay);
+    const timer = window.setTimeout(advance, rotationDelay);
     return () => window.clearTimeout(timer);
-  }, [index, paused, hovered, focused, visible, pageVisible, reducedMotion]);
+  }, [active, advance, paused, hovered, focused, visible, pageVisible, reducedMotion]);
 
-  function select(position: number) {
+  function choose(position: number) {
     setPaused(true);
-    const element = track.current;
-    element?.scrollTo({left: position * element.clientWidth, behavior: reducedMotion || Math.abs(position - index) > 1 ? 'instant' : 'smooth'});
+    select(position, reducedMotion || Math.abs(position-active)>1 ? 'instant' : 'smooth');
   }
 
   return <section className="promotion-area" aria-label="Подборки магазина" aria-roledescription="карусель"
@@ -56,24 +52,22 @@ export default function PromotionCarousel() {
     onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget)) setFocused(false); }}>
     <div className="container promotion">
       <h1 className="promotion-heading">Курортные товары оптом</h1>
-      <div className="promotion-track" ref={track} onPointerDown={() => setPaused(true)} onScroll={event => {
-        const {scrollLeft, clientWidth} = event.currentTarget;
-        if (clientWidth) setIndex(Math.min(collectionKeys.length - 1, Math.max(0, Math.round(scrollLeft / clientWidth))));
-      }}>
-        {collectionKeys.map((key, position) => {
+      <div className="promotion-track" ref={track} onPointerDown={() => setPaused(true)}>
+        {bannerFrames.map(({index, clone}, frame) => {
+          const key = collectionKeys[index];
           const {title, text, action} = collections[key];
-          return <article key={key} className={`promotion-slide promotion-slide--${key}`} aria-hidden={position !== index}>
+          return <article key={frame} className={`promotion-slide promotion-slide--${key}`} aria-hidden={clone || active!==index}>
             <div className="promotion-copy">
               <h2>{title}</h2>
               <p>{text}</p>
-              <a className="button" href={collectionHref(key)} tabIndex={position === index ? undefined : -1}>{action}<ArrowRight size={20}/></a>
+              <a className="button" href={collectionHref(key)} tabIndex={!clone && active===index ? undefined : -1}>{action}<ArrowRight size={20}/></a>
             </div>
             <img className="promotion-image" src={`${import.meta.env.BASE_URL}images/promotions/${key}.webp`} alt=""
-              fetchPriority={position === 0 ? 'high' : 'auto'} decoding="async" draggable={false}/>
+              fetchPriority={!clone && index===0 ? 'high' : 'auto'} decoding="async" draggable={false}/>
           </article>;
         })}
       </div>
-      <CarouselDots label="Выбрать баннер" slides={bannerLabels} active={index} onSelect={select}/>
+      <CarouselDots label="Выбрать баннер" slides={bannerLabels} active={active} onSelect={choose}/>
     </div>
   </section>;
 }

@@ -3,6 +3,7 @@ import {ArrowRight,Minus,Plus,ShoppingBag,Check,X,ChevronRight,Package} from 'lu
 import {money,canOrder,demoMode,packLimit,storefrontImage,type Product} from './data';
 import {useCart} from './cart';
 import {collections,type Collection} from './collections';
+import {carouselFrames,useLoopingCarousel} from './carousel';
 
 export function CarouselDots({label,slides,active,onSelect}:{label:string;slides:string[];active:number;onSelect:(index:number)=>void}) {
   return <div className="carousel-dots" role="group" aria-label={label}>
@@ -35,8 +36,7 @@ function ProductImages({product,collection}: {product:Product;collection?:Collec
 const AUTO_ADVANCE_MS = 4500;
 
 export function ProductCarousel({images, name, href, children}: {images:string[]; name:string; href?:string; children?:ReactNode}) {
-  const track = useRef<HTMLDivElement>(null);
-  const [position, setPosition] = useState(0);
+  const {track, active, select, advance} = useLoopingCarousel(images.length);
   const [visible, setVisible] = useState(false);
   const [paused, setPaused] = useState(false);
   const [focused, setFocused] = useState(false);
@@ -57,23 +57,17 @@ export function ProductCarousel({images, name, href, children}: {images:string[]
       motion.removeEventListener('change', changed);
       document.removeEventListener('visibilitychange', visibilityChanged);
     };
-  }, [href]);
+  }, [href,track,images.length]);
 
   useEffect(() => {
     if (!href || images.length < 2 || !visible || !pageVisible || paused || focused || hovered || reducedMotion) return;
-    const timer = window.setTimeout(() => {
-      if (document.visibilityState !== 'visible') return;
-      const next = (position + 1) % images.length;
-      const element = track.current;
-      element?.scrollTo({left:next * element.clientWidth, behavior:next ? 'smooth' : 'instant'});
-    }, AUTO_ADVANCE_MS);
+    const timer = window.setTimeout(advance, AUTO_ADVANCE_MS);
     return () => window.clearTimeout(timer);
-  }, [href,visible,pageVisible,paused,focused,hovered,reducedMotion,position,images.length]);
+  }, [href,visible,pageVisible,paused,focused,hovered,reducedMotion,active,advance,images.length]);
 
   function choose(index:number) {
     setPaused(true);
-    const element = track.current;
-    element?.scrollTo({left:index * element.clientWidth, behavior:reducedMotion ? 'instant' : 'smooth'});
+    select(index, reducedMotion || Math.abs(index-active)>1 ? 'instant' : 'smooth');
   }
 
   function blur(event:FocusEvent<HTMLDivElement>) {
@@ -85,20 +79,16 @@ export function ProductCarousel({images, name, href, children}: {images:string[]
   return <div className={href?'product-card__image product-carousel':'product-carousel'} role="group" aria-label={`Фото товара «${name}»`}
     onMouseEnter={()=>setHovered(true)} onMouseLeave={()=>setHovered(false)}
     onFocus={()=>setFocused(true)} onBlur={blur}>
-    <div className="product-carousel-track" ref={track}
-      onScroll={event=>{
-        const {scrollLeft,clientWidth}=event.currentTarget;
-        if (clientWidth) setPosition(Math.min(images.length-1,Math.max(0,Math.round(scrollLeft/clientWidth))));
-      }} onPointerDown={()=>setPaused(true)}>
-      {images.map((src,index)=>href
-        ? <a key={index} className="product-carousel-slide" href={href} tabIndex={index===position?0:-1}
-            aria-hidden={index!==position} aria-label={`Открыть товар «${name}»`}><Photo src={src} alt={name}/></a>
-        : <div key={index} className="product-carousel-slide" aria-hidden={index!==position}>
-            <Photo src={src} alt={name} eager={index===0}/>
+    <div className="product-carousel-track" ref={track} onPointerDown={()=>setPaused(true)}>
+      {carouselFrames(images.length).map(({index, clone},frame)=>href
+        ? <a key={frame} className="product-carousel-slide" href={href} tabIndex={!clone && active===index?0:-1}
+            aria-hidden={clone || active!==index} aria-label={`Открыть товар «${name}»`}><Photo src={images[index]} alt={name}/></a>
+        : <div key={frame} className="product-carousel-slide" aria-hidden={clone || active!==index}>
+            <Photo src={images[index]} alt={name} eager={!clone && index===0}/>
           </div>)}
     </div>
     {children}
-    <CarouselDots label="Выбрать фото" slides={images.map((_,index)=>`Показать фото ${index+1}`)} active={position} onSelect={choose}/>
+    <CarouselDots label="Выбрать фото" slides={images.map((_,index)=>`Показать фото ${index+1}`)} active={active} onSelect={choose}/>
   </div>;
 }
 

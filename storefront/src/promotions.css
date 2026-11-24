@@ -1,10 +1,4 @@
-.promotion-area {
-  padding-block: clamp(.45rem, 1.5vw, 1.15rem);
-  background:
-    radial-gradient(ellipse at 16% 36%, #c6dfe3 0%, transparent 62%),
-    radial-gradient(ellipse at 91% 84%, #dce8da 0%, transparent 54%),
-    linear-gradient(110deg, #e1e8ed, #e7f0ed 63%, #f5e9d9);
-}
+.promotion-area { padding-block: clamp(.45rem, 1.5vw, 1.15rem); }
 .header.header--home { background: #f2f5f2f5; }
 .header--home .demo-banner { background: #e4eeec; padding-block: .2rem; }
 .home-categories.section { padding-top: clamp(1.1rem, 2.6vw, 2.5rem); }
@@ -35,6 +29,7 @@
   grid-template-columns: minmax(0, 45fr) minmax(0, 55fr);
   min-height: clamp(9.5rem, 20vw, 17rem);
   scroll-snap-align: start;
+  scroll-snap-stop: always;
   color: var(--promotion-ink);
   background: var(--promotion-bg);
 }
