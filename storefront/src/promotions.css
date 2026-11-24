@@ -71,15 +71,6 @@
   object-fit: cover;
   object-position: center;
 }
-.promotion-controls { display: flex; position: absolute; inset: auto 0 .37rem; justify-content: center; align-items: center; gap: .25rem; pointer-events: none; }
-.promotion-controls button { min-width: 2rem; min-height: 2rem; display: inline-grid; place-items: center; border-radius: 50%; pointer-events: auto; }
-.promotion-arrow, .promotion-pause, .promotion-dots { background: #f9faf6ed; color: var(--blue-dark); }
-.promotion-arrow:hover, .promotion-pause:hover { background: white; }
-.promotion-dots { display: flex; border-radius: 2rem; padding-inline: .15rem; }
-.promotion-dots button { min-width: 1.35rem; }
-.promotion-dots span { width: .52rem; height: .52rem; border-radius: 1rem; background: #a2b7b7; transition: width .2s; }
-.promotion-dots [aria-current] span { width: 1.2rem; background: var(--blue-dark); }
-.promotion-pause { margin-left: .45rem; }
 .collection-heading { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: .6rem 1rem; }
 .catalog-collections { display: flex; flex-wrap: wrap; gap: .6rem; margin-block: 1rem 1.5rem; }
 .catalog-collection, .collection-card-facts, .collection-tag.tag { background: var(--promotion-bg); color: var(--promotion-ink); }

@@ -2,7 +2,7 @@ import {lazy, Suspense, useEffect, useRef, useState, type FormEvent} from 'react
 import {Check, Phone, Search, ShoppingBag, Trash2} from 'lucide-react';
 import {adminRoot, api, canOrder, demoMode, money, packLimit, phoneHref, type Category, type Content, type Product} from './data';
 import {CartProvider, useCart} from './cart';
-import {Breadcrumb, ConfirmDialog, Empty, Photo, ProductCard, Quantity} from './ui';
+import {Breadcrumb, ConfirmDialog, Empty, Photo, ProductCard, ProductCarousel, Quantity} from './ui';
 import PromotionCarousel from './PromotionCarousel';
 import {collectionHref, collectionKeys, collections, isCollection, type Collection} from './collections';
 
@@ -165,9 +165,8 @@ function ProductPage({id}: {id: string}) {
 }
 
 function ProductDetails({product}: {product: Product}) {
-  const [photo, setPhoto] = useState(0);
   return <><Breadcrumb name={product.name} parent="Каталог"/><div className="product-detail">
-    <div><Photo src={product.images[photo]} alt={product.name} eager/>{product.images.length > 1 && <div className="gallery-thumbs">{product.images.map((src,index)=><button key={src} onClick={()=>setPhoto(index)} aria-label={`Фотография ${index+1}`} aria-pressed={photo===index}><Photo src={src} alt=""/></button>)}</div>}</div>
+    <div><ProductCarousel images={product.images} name={product.name}/></div>
     <div><h1>{product.name}</h1>{product.country && <p>Страна: {product.country}</p>}<ProductCard p={product} detail/>
       {product.referenceUrl && <a href={product.referenceUrl} className="underline-link" target="_blank" rel="noreferrer">Описание модели в источнике</a>}
     </div>

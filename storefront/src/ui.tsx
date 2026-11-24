@@ -1,8 +1,15 @@
 import {useEffect,useRef,useState,type FocusEvent,type ReactNode} from 'react';
-import {ArrowRight,Minus,Plus,ShoppingBag,Check,X,ChevronRight,Pause,Play,Package} from 'lucide-react';
+import {ArrowRight,Minus,Plus,ShoppingBag,Check,X,ChevronRight,Package} from 'lucide-react';
 import {money,canOrder,demoMode,packLimit,storefrontImage,type Product} from './data';
 import {useCart} from './cart';
 import {collections,type Collection} from './collections';
+
+export function CarouselDots({label,slides,active,onSelect}:{label:string;slides:string[];active:number;onSelect:(index:number)=>void}) {
+  return <div className="carousel-dots" role="group" aria-label={label}>
+    {slides.map((slide,index)=><button key={slide} type="button" aria-label={slide}
+      aria-current={index===active?'true':undefined} disabled={slides.length===1} onClick={()=>onSelect(index)}/>)}
+  </div>;
+}
 export function Photo({src,alt,eager=false}:{src?:string|null;alt:string;eager?:boolean}) {
  const detail = demoMode && src?.endsWith('#detail');
  const [failed,setFailed]=useState(false);
@@ -17,7 +24,7 @@ function ProductImages({product,collection}: {product:Product;collection?:Collec
   const labelClass = product.referenceUrl ? 'tag tag--artwork' : 'tag';
   const label = collection ? <span className={`${labelClass} collection-tag collection-tag--${collection}`}>{collections[collection].title}</span>
     : (isNew || badge) && <span className={labelClass}>{badge || 'Новинка'}</span>;
-  if (images.length < 2) {
+  if (!images.length) {
     return <a className="product-card__image" href={href}>
       <Photo src={images[0]} alt={name}/>{label}
     </a>;
@@ -27,12 +34,11 @@ function ProductImages({product,collection}: {product:Product;collection?:Collec
 
 const AUTO_ADVANCE_MS = 4500;
 
-function ProductCarousel({images, name, href, children}: {images:string[]; name:string; href:string; children:ReactNode}) {
+export function ProductCarousel({images, name, href, children}: {images:string[]; name:string; href?:string; children?:ReactNode}) {
   const track = useRef<HTMLDivElement>(null);
   const [position, setPosition] = useState(0);
   const [visible, setVisible] = useState(false);
   const [paused, setPaused] = useState(false);
-  const [interacting, setInteracting] = useState(false);
   const [focused, setFocused] = useState(false);
   const [hovered, setHovered] = useState(false);
   const [pageVisible, setPageVisible] = useState(() => document.visibilityState === 'visible');
@@ -45,16 +51,16 @@ function ProductCarousel({images, name, href, children}: {images:string[]; name:
     const visibilityChanged = () => setPageVisible(document.visibilityState === 'visible');
     document.addEventListener('visibilitychange', visibilityChanged);
     const observer = new IntersectionObserver(([entry]) => setVisible(entry.intersectionRatio >= .55), {threshold:.55});
-    if (track.current) observer.observe(track.current);
+    if (href && track.current) observer.observe(track.current);
     return () => {
       observer.disconnect();
       motion.removeEventListener('change', changed);
       document.removeEventListener('visibilitychange', visibilityChanged);
     };
-  }, []);
+  }, [href]);
 
   useEffect(() => {
-    if (!visible || !pageVisible || paused || interacting || focused || hovered || reducedMotion) return;
+    if (!href || images.length < 2 || !visible || !pageVisible || paused || focused || hovered || reducedMotion) return;
     const timer = window.setTimeout(() => {
       if (document.visibilityState !== 'visible') return;
       const next = (position + 1) % images.length;
@@ -62,9 +68,10 @@ function ProductCarousel({images, name, href, children}: {images:string[]; name:
       element?.scrollTo({left:next * element.clientWidth, behavior:next ? 'smooth' : 'instant'});
     }, AUTO_ADVANCE_MS);
     return () => window.clearTimeout(timer);
-  }, [visible,pageVisible,paused,interacting,focused,hovered,reducedMotion,position,images.length]);
+  }, [href,visible,pageVisible,paused,focused,hovered,reducedMotion,position,images.length]);
 
   function choose(index:number) {
+    setPaused(true);
     const element = track.current;
     element?.scrollTo({left:index * element.clientWidth, behavior:reducedMotion ? 'instant' : 'smooth'});
   }
@@ -73,27 +80,25 @@ function ProductCarousel({images, name, href, children}: {images:string[]; name:
     if (!event.currentTarget.contains(event.relatedTarget)) setFocused(false);
   }
 
-  return <div className="product-card__image product-carousel" role="group" aria-label={`Фото товара «${name}»`}
+  if (!images.length) return <Photo alt={name}/>;
+
+  return <div className={href?'product-card__image product-carousel':'product-carousel'} role="group" aria-label={`Фото товара «${name}»`}
     onMouseEnter={()=>setHovered(true)} onMouseLeave={()=>setHovered(false)}
     onFocus={()=>setFocused(true)} onBlur={blur}>
     <div className="product-carousel-track" ref={track}
-      onScroll={event=>{const element=event.currentTarget; if (element.clientWidth) setPosition(Math.round(element.scrollLeft / element.clientWidth));}}
-      onPointerDown={()=>setInteracting(true)} onPointerUp={()=>setInteracting(false)}
-      onPointerCancel={()=>setInteracting(false)} onPointerLeave={()=>setInteracting(false)}>
-      {images.map((src,index)=><a key={src} className="product-carousel-slide" href={href}
-        tabIndex={index===position?0:-1} aria-hidden={index!==position} aria-label={`Открыть товар «${name}»`}>
-        <Photo src={src} alt={name}/>
-      </a>)}
+      onScroll={event=>{
+        const {scrollLeft,clientWidth}=event.currentTarget;
+        if (clientWidth) setPosition(Math.min(images.length-1,Math.max(0,Math.round(scrollLeft/clientWidth))));
+      }} onPointerDown={()=>setPaused(true)}>
+      {images.map((src,index)=>href
+        ? <a key={index} className="product-carousel-slide" href={href} tabIndex={index===position?0:-1}
+            aria-hidden={index!==position} aria-label={`Открыть товар «${name}»`}><Photo src={src} alt={name}/></a>
+        : <div key={index} className="product-carousel-slide" aria-hidden={index!==position}>
+            <Photo src={src} alt={name} eager={index===0}/>
+          </div>)}
     </div>
     {children}
-    <div className="product-carousel-controls">
-      <div className="product-carousel-dots">
-        {images.map((src,index)=><button key={src} type="button" aria-label={`Показать фото ${index+1}`}
-          aria-current={index===position?'true':undefined} onClick={()=>choose(index)}/>)}
-      </div>
-      {!reducedMotion&&<button className="product-carousel-pause" type="button" onClick={()=>setPaused(!paused)}
-        aria-label={paused?'Включить автопрокрутку':'Остановить автопрокрутку'}>{paused?<Play size={14}/>:<Pause size={14}/>}</button>}
-    </div>
+    <CarouselDots label="Выбрать фото" slides={images.map((_,index)=>`Показать фото ${index+1}`)} active={position} onSelect={choose}/>
   </div>;
 }
 

@@ -1,14 +1,15 @@
 import {useEffect, useRef, useState} from 'react';
-import {ArrowRight, ChevronLeft, ChevronRight, Pause, Play} from 'lucide-react';
+import {ArrowRight} from 'lucide-react';
 import {collectionHref, collectionKeys, collections} from './collections';
+import {CarouselDots} from './ui';
 import './promotions.css';
 
 const rotationDelay = 6500;
 const reducedMotionQuery = '(prefers-reduced-motion: reduce)';
+const bannerLabels = collectionKeys.map(key => collections[key].title);
 
 export default function PromotionCarousel() {
   const track = useRef<HTMLDivElement>(null);
-  const rotation = useRef<HTMLButtonElement>(null);
   const [index, setIndex] = useState(0);
   const [paused, setPaused] = useState(false);
   const [hovered, setHovered] = useState(false);
@@ -43,19 +44,19 @@ export default function PromotionCarousel() {
   }, [index, paused, hovered, focused, visible, pageVisible, reducedMotion]);
 
   function select(position: number) {
+    setPaused(true);
     const element = track.current;
-    const next = (position + collectionKeys.length) % collectionKeys.length;
-    element?.scrollTo({left: next * element.clientWidth, behavior: reducedMotion || Math.abs(next - index) > 1 ? 'instant' : 'smooth'});
+    element?.scrollTo({left: position * element.clientWidth, behavior: reducedMotion || Math.abs(position - index) > 1 ? 'instant' : 'smooth'});
   }
 
   return <section className="promotion-area" aria-label="Подборки магазина" aria-roledescription="карусель"
     onPointerEnter={event => { if (event.pointerType === 'mouse') setHovered(true); }}
     onPointerLeave={() => setHovered(false)}
-    onFocus={event => setFocused(event.target !== rotation.current)}
+    onFocus={() => setFocused(true)}
     onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget)) setFocused(false); }}>
     <div className="container promotion">
       <h1 className="promotion-heading">Курортные товары оптом</h1>
-      <div className="promotion-track" ref={track} onScroll={event => {
+      <div className="promotion-track" ref={track} onPointerDown={() => setPaused(true)} onScroll={event => {
         const {scrollLeft, clientWidth} = event.currentTarget;
         if (clientWidth) setIndex(Math.min(collectionKeys.length - 1, Math.max(0, Math.round(scrollLeft / clientWidth))));
       }}>
@@ -72,16 +73,7 @@ export default function PromotionCarousel() {
           </article>;
         })}
       </div>
-      <div className="promotion-controls">
-        <button type="button" className="promotion-arrow" onClick={() => select(index - 1)} aria-label="Предыдущий баннер"><ChevronLeft size={22}/></button>
-        <div className="promotion-dots" role="group" aria-label="Выбрать баннер">
-          {collectionKeys.map((key, position) => <button key={key} type="button" onClick={() => select(position)}
-            aria-label={collections[key].title} aria-current={position === index ? 'true' : undefined}><span/></button>)}
-        </div>
-        <button type="button" className="promotion-arrow" onClick={() => select(index + 1)} aria-label="Следующий баннер"><ChevronRight size={22}/></button>
-        {!reducedMotion && <button ref={rotation} type="button" className="promotion-pause" onClick={() => setPaused(value => !value)}
-          aria-label={paused ? 'Включить прокрутку баннеров' : 'Приостановить прокрутку баннеров'}>{paused ? <Play size={17}/> : <Pause size={17}/>}</button>}
-      </div>
+      <CarouselDots label="Выбрать баннер" slides={bannerLabels} active={index} onSelect={select}/>
     </div>
   </section>;
 }
